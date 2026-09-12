@@ -1,10 +1,17 @@
 import { useEffect, useState } from "react";
 import { Check } from "lucide-react";
-import { Modal, Input, Textarea } from "./ui.jsx";
+import { Modal, Input, Textarea, Select } from "./ui.jsx";
 import { EMPTY_FORM, OPERATIONS, SUP_CLASS_COLORS, FORM_STEPS } from "../utils/constants.js";
 import { computeSupClass } from "../utils/format.js";
+import { DEPARTEMENTS, COMMUNES_BY_DEPARTEMENT, ARRONDISSEMENTS_BY_COMMUNE } from "../utils/benin.js";
 
 const PHONE_REGEX = /^[0-9+\-\s]{6,20}$/;
+
+/** Garde la valeur courante sélectionnable même si absente de la liste (anciennes données). */
+function withCurrent(options, current) {
+  if (current && !options.includes(current)) return [current, ...options];
+  return options;
+}
 
 function validateField(field, form) {
   switch (field) {
@@ -148,6 +155,18 @@ export default function RehabilitationFormModal({ open, initialData, onClose, on
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
   };
 
+  // Listes en cascade : changer de département réinitialise commune et arrondissement,
+  // changer de commune réinitialise l'arrondissement.
+  const handleDepartementChange = (e) => {
+    const departement = e.target.value;
+    setForm((prev) => ({ ...prev, departement, commune: "", arrondissement: "" }));
+  };
+
+  const handleCommuneChange = (e) => {
+    const commune = e.target.value;
+    setForm((prev) => ({ ...prev, commune, arrondissement: "" }));
+  };
+
   const currentStep = FORM_STEPS[stepIndex];
   const isLastStep = stepIndex === FORM_STEPS.length - 1;
   const allErrors = { ...errors, ...(serverErrors || {}) };
@@ -194,6 +213,8 @@ export default function RehabilitationFormModal({ open, initialData, onClose, on
   }
 
   const supClassPreview = computeSupClass(form.superficie_rehabilitee);
+  const communesOptions = form.departement ? COMMUNES_BY_DEPARTEMENT[form.departement] || [] : [];
+  const arrondissementsOptions = form.commune ? ARRONDISSEMENTS_BY_COMMUNE[form.commune] || [] : [];
 
   return (
     <Modal
@@ -235,9 +256,24 @@ export default function RehabilitationFormModal({ open, initialData, onClose, on
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Input label="N° PDA *" value={form.pda_number} onChange={handleChange("pda_number")} error={allErrors.pda_number} />
                 <Input label="Année de réhabilitation *" type="number" min={1990} max={2100} value={form.annee_rehabilitation} onChange={handleChange("annee_rehabilitation")} error={allErrors.annee_rehabilitation} />
-                <Input label="Département *" value={form.departement} onChange={handleChange("departement")} error={allErrors.departement} />
-                <Input label="Commune *" value={form.commune} onChange={handleChange("commune")} error={allErrors.commune} />
-                <Input label="Arrondissement *" value={form.arrondissement} onChange={handleChange("arrondissement")} error={allErrors.arrondissement} />
+                <Select label="Département *" value={form.departement} onChange={handleDepartementChange} error={allErrors.departement}>
+                  <option value="">— Sélectionner le département —</option>
+                  {DEPARTEMENTS.map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </Select>
+                <Select label="Commune *" value={form.commune} onChange={handleCommuneChange} error={allErrors.commune} disabled={!form.departement}>
+                  <option value="">{form.departement ? "— Sélectionner la commune —" : "— Choisir d'abord un département —"}</option>
+                  {withCurrent(communesOptions, form.commune).map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </Select>
+                <Select label="Arrondissement *" value={form.arrondissement} onChange={handleChange("arrondissement")} error={allErrors.arrondissement} disabled={!form.commune}>
+                  <option value="">{form.commune ? "— Sélectionner l'arrondissement —" : "— Choisir d'abord une commune —"}</option>
+                  {withCurrent(arrondissementsOptions, form.arrondissement).map((a) => (
+                    <option key={a} value={a}>{a}</option>
+                  ))}
+                </Select>
                 <Input label="Village *" value={form.village} onChange={handleChange("village")} error={allErrors.village} />
               </div>
             )}
