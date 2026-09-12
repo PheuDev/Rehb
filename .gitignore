@@ -1,0 +1,21 @@
+# Dépendances et environnement virtuel
+venv/
+.venv/
+node_modules/
+
+# Fichiers d'environnement (secrets)
+.env
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Logs
+*.log
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
