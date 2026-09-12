@@ -38,6 +38,8 @@ rehab-app/
     ├── vite.config.js
     ├── tailwind.config.js
     └── .env.example
+
+  # Rehb
 ```
 
 ## 1. Prérequis
