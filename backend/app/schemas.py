@@ -1,0 +1,180 @@
+import re
+from datetime import datetime
+from decimal import Decimal
+from typing import Optional, List, Dict, Any
+
+from pydantic import BaseModel, Field, field_validator, ConfigDict
+
+PHONE_REGEX = re.compile(r"^[0-9+\-\s]{6,20}$")
+
+PHONE_ERROR_MSG = (
+    "Le numéro de téléphone doit contenir entre 6 et 20 caractères "
+    "(chiffres, +, espaces, tirets uniquement)."
+)
+
+
+def _validate_phone(v: Optional[str]) -> Optional[str]:
+    if v is None or v == "":
+        return v
+    if not PHONE_REGEX.match(v):
+        raise ValueError(PHONE_ERROR_MSG)
+    return v
+
+
+class RehabilitationBase(BaseModel):
+    pda_number: str = Field(..., max_length=50, description="Numéro du PDA")
+    departement: str = Field(..., max_length=120)
+    commune: str = Field(..., max_length=120)
+    arrondissement: str = Field(..., max_length=120)
+    village: str = Field(..., max_length=120)
+    annee_rehabilitation: int = Field(..., ge=1990, le=2100)
+
+    brigade_name: Optional[str] = Field(None, max_length=180)
+    brigade_manager_name: Optional[str] = Field(None, max_length=180)
+    brigade_manager_phone: Optional[str] = Field(None, max_length=30)
+
+    producer_name: Optional[str] = Field(None, max_length=180)
+    producer_phone: Optional[str] = Field(None, max_length=30)
+
+    superficie_rehabilitee: Decimal = Field(..., ge=0)
+
+    desherbage_superficie: Optional[Decimal] = Field(None, ge=0)
+    desherbage_operateur_nom: Optional[str] = Field(None, max_length=180)
+    desherbage_operateur_phone: Optional[str] = Field(None, max_length=30)
+
+    eclaircie_superficie: Optional[Decimal] = Field(None, ge=0)
+    eclaircie_operateur_nom: Optional[str] = Field(None, max_length=180)
+    eclaircie_operateur_phone: Optional[str] = Field(None, max_length=30)
+
+    elagage_superficie: Optional[Decimal] = Field(None, ge=0)
+    elagage_operateur_nom: Optional[str] = Field(None, max_length=180)
+    elagage_operateur_phone: Optional[str] = Field(None, max_length=30)
+
+    debardage_superficie: Optional[Decimal] = Field(None, ge=0)
+    debardage_operateur_nom: Optional[str] = Field(None, max_length=180)
+    debardage_operateur_phone: Optional[str] = Field(None, max_length=30)
+
+    observations: Optional[str] = None
+
+    @field_validator(
+        "brigade_manager_phone",
+        "producer_phone",
+        "desherbage_operateur_phone",
+        "eclaircie_operateur_phone",
+        "elagage_operateur_phone",
+        "debardage_operateur_phone",
+    )
+    @classmethod
+    def check_phone(cls, v):
+        return _validate_phone(v)
+
+
+class RehabilitationCreate(RehabilitationBase):
+    pass
+
+
+class RehabilitationUpdate(BaseModel):
+    """Tous les champs sont optionnels pour permettre une mise à jour partielle."""
+
+    pda_number: Optional[str] = Field(None, max_length=50)
+    departement: Optional[str] = Field(None, max_length=120)
+    commune: Optional[str] = Field(None, max_length=120)
+    arrondissement: Optional[str] = Field(None, max_length=120)
+    village: Optional[str] = Field(None, max_length=120)
+    annee_rehabilitation: Optional[int] = Field(None, ge=1990, le=2100)
+
+    brigade_name: Optional[str] = Field(None, max_length=180)
+    brigade_manager_name: Optional[str] = Field(None, max_length=180)
+    brigade_manager_phone: Optional[str] = Field(None, max_length=30)
+
+    producer_name: Optional[str] = Field(None, max_length=180)
+    producer_phone: Optional[str] = Field(None, max_length=30)
+
+    superficie_rehabilitee: Optional[Decimal] = Field(None, ge=0)
+
+    desherbage_superficie: Optional[Decimal] = Field(None, ge=0)
+    desherbage_operateur_nom: Optional[str] = Field(None, max_length=180)
+    desherbage_operateur_phone: Optional[str] = Field(None, max_length=30)
+
+    eclaircie_superficie: Optional[Decimal] = Field(None, ge=0)
+    eclaircie_operateur_nom: Optional[str] = Field(None, max_length=180)
+    eclaircie_operateur_phone: Optional[str] = Field(None, max_length=30)
+
+    elagage_superficie: Optional[Decimal] = Field(None, ge=0)
+    elagage_operateur_nom: Optional[str] = Field(None, max_length=180)
+    elagage_operateur_phone: Optional[str] = Field(None, max_length=30)
+
+    debardage_superficie: Optional[Decimal] = Field(None, ge=0)
+    debardage_operateur_nom: Optional[str] = Field(None, max_length=180)
+    debardage_operateur_phone: Optional[str] = Field(None, max_length=30)
+
+    observations: Optional[str] = None
+
+    @field_validator(
+        "brigade_manager_phone",
+        "producer_phone",
+        "desherbage_operateur_phone",
+        "eclaircie_operateur_phone",
+        "elagage_operateur_phone",
+        "debardage_operateur_phone",
+    )
+    @classmethod
+    def check_phone(cls, v):
+        return _validate_phone(v)
+
+
+class RehabilitationOut(RehabilitationBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    sup_class: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class PaginationMeta(BaseModel):
+    total: int
+    page: int
+    limit: int
+    totalPages: int
+    hasNext: bool
+    hasPrev: bool
+    superficieTotale: float
+
+
+class RehabilitationListResponse(BaseModel):
+    items: List[RehabilitationOut]
+    pagination: PaginationMeta
+
+
+class FiltersResponse(BaseModel):
+    departements: List[str]
+    communes: List[str]
+    arrondissements: List[str]
+    villages: List[str]
+    brigades: List[str]
+    annees: List[int]
+    supClasses: List[str]
+
+
+class ImportRowError(BaseModel):
+    ligne: int
+    erreurs: List[str]
+
+
+class ImportResult(BaseModel):
+    total: int
+    importees: int
+    erreurs: List[ImportRowError]
+
+
+class StatsResponse(BaseModel):
+    totalFiches: int
+    superficieTotale: float
+    totalDepartements: int
+    totalCommunes: int
+    totalVillages: int
+    totalBrigades: int
+    parDepartement: List[Dict[str, Any]]
+    parAnnee: List[Dict[str, Any]]
+    parSupClass: List[Dict[str, Any]]
