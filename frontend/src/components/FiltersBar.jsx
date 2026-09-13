@@ -2,7 +2,7 @@ import { Search, RotateCcw, Download, FileSpreadsheet, UploadCloud } from "lucid
 import { Input, Select } from "./ui.jsx";
 import { SUP_CLASSES } from "../utils/constants.js";
 
-export default function FiltersBar({ filters, filterOptions, onChange, onReset, onExport, onExportExcel, onImportExcel }) {
+export default function FiltersBar({ filters, filterOptions, onChange, onReset, onExport, onExportExcel, onImportExcel, onClearAll }) {
   const handle = (field) => (e) => onChange({ ...filters, [field]: e.target.value });
 
   return (
