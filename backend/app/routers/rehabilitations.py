@@ -244,6 +244,15 @@ def update_rehabilitation(rehab_id: int, payload: schemas.RehabilitationUpdate, 
 # ---------------------------------------------------------------------------
 # Suppression
 # ---------------------------------------------------------------------------
+# NB : la route statique "/all" (vidage) DOIT être déclarée AVANT la route
+# dynamique "/{rehab_id}" : dans FastAPI, le routage se fait dans l'ordre de
+# déclaration. Sinon "all" tente d'être converti en int et renvoie un 422.
+@router.delete("/all")
+def clear_rehabilitations(db: Session = Depends(get_db)):
+    deleted = crud.clear_all(db)
+    return {"deleted": deleted, "message": "Toutes les fiches ont été supprimées."}
+
+
 @router.delete("/{rehab_id}")
 def delete_rehabilitation(rehab_id: int, db: Session = Depends(get_db)):
     obj = crud.get_by_id(db, rehab_id)
@@ -264,9 +273,3 @@ def delete_rehabilitations(payload: schemas.BulkDeleteRequest, db: Session = Dep
         raise HTTPException(status_code=404, detail="Aucune fiche sélectionnée n’a été trouvée.")
 
     return {"deleted": deleted, "message": f"{deleted} fiche(s) supprimée(s) avec succès."}
-
-
-@router.delete("/all")
-def clear_rehabilitations(db: Session = Depends(get_db)):
-    deleted = crud.clear_all(db)
-    return {"deleted": deleted, "message": "Toutes les fiches ont été supprimées."}
