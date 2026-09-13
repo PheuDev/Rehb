@@ -30,6 +30,11 @@ export async function deleteRehabilitations(ids) {
   return data;
 }
 
+export async function clearAllRehabilitations() {
+  const { data } = await client.delete("/rehabilitations/all");
+  return data;
+}
+
 export async function getFilters() {
   const { data } = await client.get("/rehabilitations/filters");
   return data;

@@ -60,6 +60,9 @@ export default function FiltersBar({ filters, filterOptions, onChange, onReset, 
         <button onClick={onImportExcel} className="btn-secondary">
           <UploadCloud size={16} /> Importer Excel
         </button>
+        <button onClick={onClearAll} className="btn-danger">
+          Vider la BD
+        </button>
       </div>
     </div>
   );

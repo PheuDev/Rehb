@@ -17,6 +17,7 @@ import {
   updateRehabilitation,
   deleteRehabilitation,
   deleteRehabilitations,
+  clearAllRehabilitations,
   getFilters,
   getStats,
   exportCsv,
@@ -49,8 +50,10 @@ export default function RehabilitationsPage() {
 
   const [confirmTarget, setConfirmTarget] = useState(null);
   const [bulkDeleteIds, setBulkDeleteIds] = useState([]);
+  const [clearAllConfirm, setClearAllConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [clearingAll, setClearingAll] = useState(false);
 
   const [selectedIds, setSelectedIds] = useState([]);
 
@@ -208,6 +211,21 @@ export default function RehabilitationsPage() {
     }
   }
 
+  async function handleClearAll() {
+    setClearingAll(true);
+    try {
+      await clearAllRehabilitations();
+      showToast("success", "Base de données vidée avec succès.");
+      setClearAllConfirm(false);
+      setSelectedIds([]);
+      await Promise.all([loadList(), loadStats(), loadFilterOptions()]);
+    } catch (err) {
+      showToast("error", "Erreur lors du vidage de la base de données.");
+    } finally {
+      setClearingAll(false);
+    }
+  }
+
   function toggleSelectItem(id) {
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((itemId) => itemId !== id) : [...prev, id]));
   }
@@ -276,6 +294,7 @@ export default function RehabilitationsPage() {
           onExport={handleExport}
           onExportExcel={handleExportExcel}
           onImportExcel={() => setImportModalOpen(true)}
+          onClearAll={() => setClearAllConfirm(true)}
         />
 
         {selectedIds.length > 0 && (
@@ -335,19 +354,34 @@ export default function RehabilitationsPage() {
       />
 
       <ConfirmDialog
-        open={!!confirmTarget || bulkDeleteIds.length > 0}
-        title={confirmTarget ? "Supprimer la fiche" : "Supprimer la sélection"}
+        open={!!confirmTarget || bulkDeleteIds.length > 0 || clearAllConfirm}
+        title={
+          confirmTarget
+            ? "Supprimer la fiche"
+            : bulkDeleteIds.length > 0
+              ? "Supprimer la sélection"
+              : "Vider la base de données"
+        }
         message={
           confirmTarget
             ? `Voulez-vous vraiment supprimer la fiche N° PDA "${confirmTarget?.pda_number}" ? Cette action est irréversible.`
-            : `Voulez-vous vraiment supprimer ${bulkDeleteIds.length} fiche(s) sélectionnée(s) ? Cette action est irréversible.`
+            : bulkDeleteIds.length > 0
+              ? `Voulez-vous vraiment supprimer ${bulkDeleteIds.length} fiche(s) sélectionnée(s) ? Cette action est irréversible.`
+              : "Voulez-vous vraiment supprimer toutes les fiches de la base de données ? Cette action est irréversible."
         }
-        onConfirm={confirmTarget ? handleConfirmDelete : handleConfirmBulkDelete}
+        onConfirm={
+          confirmTarget
+            ? handleConfirmDelete
+            : bulkDeleteIds.length > 0
+              ? handleConfirmBulkDelete
+              : handleClearAll
+        }
         onCancel={() => {
           setConfirmTarget(null);
           setBulkDeleteIds([]);
+          setClearAllConfirm(false);
         }}
-        loading={deleting || bulkDeleting}
+        loading={deleting || bulkDeleting || clearingAll}
       />
 
       <Toast toast={toast} onClose={() => setToast(null)} />

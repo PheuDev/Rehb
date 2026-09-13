@@ -165,6 +165,12 @@ def delete_many(db: Session, ids: list[int]) -> int:
     return deleted
 
 
+def clear_all(db: Session) -> int:
+    deleted = db.query(Rehabilitation).delete(synchronize_session=False)
+    db.commit()
+    return deleted
+
+
 def get_filters(db: Session):
     def distinct_values(column):
         rows = (

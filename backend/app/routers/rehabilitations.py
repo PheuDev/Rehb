@@ -264,3 +264,9 @@ def delete_rehabilitations(payload: schemas.BulkDeleteRequest, db: Session = Dep
         raise HTTPException(status_code=404, detail="Aucune fiche sélectionnée n’a été trouvée.")
 
     return {"deleted": deleted, "message": f"{deleted} fiche(s) supprimée(s) avec succès."}
+
+
+@router.delete("/all")
+def clear_rehabilitations(db: Session = Depends(get_db)):
+    deleted = crud.clear_all(db)
+    return {"deleted": deleted, "message": "Toutes les fiches ont été supprimées."}
