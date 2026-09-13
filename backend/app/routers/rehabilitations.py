@@ -251,3 +251,16 @@ def delete_rehabilitation(rehab_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Fiche de réhabilitation introuvable.")
     crud.delete(db, obj)
     return {"message": "Fiche supprimée avec succès."}
+
+
+@router.post("/bulk-delete")
+def delete_rehabilitations(payload: schemas.BulkDeleteRequest, db: Session = Depends(get_db)):
+    ids = sorted(set(payload.ids))
+    if not ids:
+        raise HTTPException(status_code=400, detail="Aucune fiche sélectionnée.")
+
+    deleted = crud.delete_many(db, ids)
+    if deleted == 0:
+        raise HTTPException(status_code=404, detail="Aucune fiche sélectionnée n’a été trouvée.")
+
+    return {"deleted": deleted, "message": f"{deleted} fiche(s) supprimée(s) avec succès."}

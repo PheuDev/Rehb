@@ -168,6 +168,10 @@ class ImportResult(BaseModel):
     erreurs: List[ImportRowError]
 
 
+class BulkDeleteRequest(BaseModel):
+    ids: List[int] = Field(..., min_length=1)
+
+
 class StatsResponse(BaseModel):
     totalFiches: int
     superficieTotale: float

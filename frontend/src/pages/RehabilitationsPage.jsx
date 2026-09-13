@@ -16,6 +16,7 @@ import {
   createRehabilitation,
   updateRehabilitation,
   deleteRehabilitation,
+  deleteRehabilitations,
   getFilters,
   getStats,
   exportCsv,
@@ -47,7 +48,11 @@ export default function RehabilitationsPage() {
   const [serverErrors, setServerErrors] = useState({});
 
   const [confirmTarget, setConfirmTarget] = useState(null);
+  const [bulkDeleteIds, setBulkDeleteIds] = useState([]);
   const [deleting, setDeleting] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  const [selectedIds, setSelectedIds] = useState([]);
 
   const [toast, setToast] = useState(null);
   const showToast = (type, message) => setToast({ type, message });
@@ -117,6 +122,12 @@ export default function RehabilitationsPage() {
     setPage(1);
   }, [debouncedQ, filters.departement, filters.commune, filters.annee, filters.sup_class]);
 
+  useEffect(() => {
+    setSelectedIds((prev) => prev.filter((id) => items.some((item) => item.id === id)));
+  }, [items]);
+
+  const allCurrentPageSelected = items.length > 0 && items.every((item) => selectedIds.includes(item.id));
+
   function handleSort(column) {
     if (sortBy === column) {
       setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
@@ -181,6 +192,35 @@ export default function RehabilitationsPage() {
     }
   }
 
+  async function handleConfirmBulkDelete() {
+    if (!bulkDeleteIds.length) return;
+    setBulkDeleting(true);
+    try {
+      await deleteRehabilitations(bulkDeleteIds);
+      showToast("success", `${bulkDeleteIds.length} fiche(s) supprimée(s) avec succès.`);
+      setBulkDeleteIds([]);
+      setSelectedIds([]);
+      await Promise.all([loadList(), loadStats(), loadFilterOptions()]);
+    } catch (err) {
+      showToast("error", "Erreur lors de la suppression des fiches sélectionnées.");
+    } finally {
+      setBulkDeleting(false);
+    }
+  }
+
+  function toggleSelectItem(id) {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((itemId) => itemId !== id) : [...prev, id]));
+  }
+
+  function toggleSelectAll() {
+    if (allCurrentPageSelected) {
+      setSelectedIds((prev) => prev.filter((itemId) => !items.some((item) => item.id === itemId)));
+      return;
+    }
+
+    setSelectedIds((prev) => [...new Set([...prev, ...items.map((item) => item.id)])]);
+  }
+
   async function handleExport() {
     try {
       await exportCsv(queryParams);
@@ -238,6 +278,28 @@ export default function RehabilitationsPage() {
           onImportExcel={() => setImportModalOpen(true)}
         />
 
+        {selectedIds.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-forest-200 bg-forest-50 px-4 py-3">
+            <div className="text-sm text-forest-800">
+              <span className="font-semibold">{selectedIds.length}</span> fiche(s) sélectionnée(s)
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                className="btn-danger"
+                onClick={() => setBulkDeleteIds(selectedIds)}
+              >
+                Supprimer la sélection
+              </button>
+              <button
+                className="btn-secondary"
+                onClick={() => setSelectedIds([])}
+              >
+                Tout désélectionner
+              </button>
+            </div>
+          </div>
+        )}
+
         <RehabilitationTable
           items={items}
           loading={loading}
@@ -246,6 +308,10 @@ export default function RehabilitationsPage() {
           onSort={handleSort}
           onEdit={openEditModal}
           onDelete={setConfirmTarget}
+          selectedIds={selectedIds}
+          onToggleSelect={toggleSelectItem}
+          onToggleSelectAll={toggleSelectAll}
+          allSelected={allCurrentPageSelected}
         />
 
         <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
@@ -269,12 +335,19 @@ export default function RehabilitationsPage() {
       />
 
       <ConfirmDialog
-        open={!!confirmTarget}
-        title="Supprimer la fiche"
-        message={`Voulez-vous vraiment supprimer la fiche N° PDA "${confirmTarget?.pda_number}" ? Cette action est irréversible.`}
-        onConfirm={handleConfirmDelete}
-        onCancel={() => setConfirmTarget(null)}
-        loading={deleting}
+        open={!!confirmTarget || bulkDeleteIds.length > 0}
+        title={confirmTarget ? "Supprimer la fiche" : "Supprimer la sélection"}
+        message={
+          confirmTarget
+            ? `Voulez-vous vraiment supprimer la fiche N° PDA "${confirmTarget?.pda_number}" ? Cette action est irréversible.`
+            : `Voulez-vous vraiment supprimer ${bulkDeleteIds.length} fiche(s) sélectionnée(s) ? Cette action est irréversible.`
+        }
+        onConfirm={confirmTarget ? handleConfirmDelete : handleConfirmBulkDelete}
+        onCancel={() => {
+          setConfirmTarget(null);
+          setBulkDeleteIds([]);
+        }}
+        loading={deleting || bulkDeleting}
       />
 
       <Toast toast={toast} onClose={() => setToast(null)} />

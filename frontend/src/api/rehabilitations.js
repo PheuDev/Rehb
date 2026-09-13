@@ -25,6 +25,11 @@ export async function deleteRehabilitation(id) {
   return data;
 }
 
+export async function deleteRehabilitations(ids) {
+  const { data } = await client.post("/rehabilitations/bulk-delete", { ids });
+  return data;
+}
+
 export async function getFilters() {
   const { data } = await client.get("/rehabilitations/filters");
   return data;

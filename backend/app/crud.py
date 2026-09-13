@@ -157,6 +157,14 @@ def delete(db: Session, obj: Rehabilitation) -> None:
     db.commit()
 
 
+def delete_many(db: Session, ids: list[int]) -> int:
+    if not ids:
+        return 0
+    deleted = db.query(Rehabilitation).filter(Rehabilitation.id.in_(ids)).delete(synchronize_session=False)
+    db.commit()
+    return deleted
+
+
 def get_filters(db: Session):
     def distinct_values(column):
         rows = (

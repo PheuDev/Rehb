@@ -4,6 +4,7 @@ import { formatNumber } from "../utils/format.js";
 import { SUP_CLASS_COLORS, OPERATIONS } from "../utils/constants.js";
 
 const COLUMNS = [
+  { key: "selection", label: "Sélection" },
   { key: "pda_number", label: "N° PDA" },
   { key: "village", label: "Localisation" },
   { key: "brigade_name", label: "Brigade" },
@@ -19,26 +20,51 @@ function SortIcon({ active, order }) {
   return order === "asc" ? <ArrowUp size={14} /> : <ArrowDown size={14} />;
 }
 
-export default function RehabilitationTable({ items, loading, sortBy, sortOrder, onSort, onEdit, onDelete }) {
+export default function RehabilitationTable({
+  items,
+  loading,
+  sortBy,
+  sortOrder,
+  onSort,
+  onEdit,
+  onDelete,
+  selectedIds = [],
+  onToggleSelect,
+  onToggleSelectAll,
+  allSelected = false,
+}) {
   return (
     <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
       <table className="min-w-full divide-y divide-gray-200 text-sm">
         <thead className="bg-gray-50">
           <tr>
-            {COLUMNS.map((col) => (
-              <th
-                key={col.label}
-                onClick={col.key ? () => onSort(col.key) : undefined}
-                className={`px-4 py-3 text-left font-semibold text-gray-600 whitespace-nowrap ${
-                  col.key ? "cursor-pointer select-none hover:text-gray-900" : ""
-                }`}
-              >
-                <span className="inline-flex items-center gap-1">
-                  {col.label}
-                  {col.key && <SortIcon active={sortBy === col.key} order={sortOrder} />}
-                </span>
-              </th>
-            ))}
+            {COLUMNS.map((col) => {
+              const isSelectionCol = col.key === "selection";
+              return (
+                <th
+                  key={col.label}
+                  onClick={isSelectionCol || !col.key ? undefined : () => onSort(col.key)}
+                  className={`px-4 py-3 text-left font-semibold text-gray-600 whitespace-nowrap ${
+                    !isSelectionCol && col.key ? "cursor-pointer select-none hover:text-gray-900" : ""
+                  }`}
+                >
+                  {isSelectionCol ? (
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      onChange={onToggleSelectAll}
+                      className="h-4 w-4 rounded border-gray-300 text-forest-600 focus:ring-forest-500"
+                      aria-label="Tout sélectionner"
+                    />
+                  ) : (
+                    <span className="inline-flex items-center gap-1">
+                      {col.label}
+                      {col.key && <SortIcon active={sortBy === col.key} order={sortOrder} />}
+                    </span>
+                  )}
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
@@ -61,6 +87,15 @@ export default function RehabilitationTable({ items, loading, sortBy, sortOrder,
           {!loading &&
             items.map((item) => (
               <tr key={item.id} className="hover:bg-gray-50">
+                <td className="px-4 py-3">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.includes(item.id)}
+                    onChange={() => onToggleSelect(item.id)}
+                    className="h-4 w-4 rounded border-gray-300 text-forest-600 focus:ring-forest-500"
+                    aria-label={`Sélectionner la fiche ${item.pda_number}`}
+                  />
+                </td>
                 <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">{item.pda_number}</td>
                 <td className="px-4 py-3">
                   <div className="font-medium text-gray-900">{item.village}</div>
