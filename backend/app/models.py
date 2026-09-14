@@ -16,6 +16,7 @@ from app.database import Base
 
 SUP_CLASS_EXPR = (
     "CASE "
+    "WHEN superficie_rehabilitee IS NULL THEN NULL "
     "WHEN superficie_rehabilitee <= 5 THEN 'S ≤ 5 ha' "
     "WHEN superficie_rehabilitee <= 10 THEN '5 < S ≤ 10 ha' "
     "WHEN superficie_rehabilitee <= 20 THEN '10 < S ≤ 20 ha' "
@@ -35,12 +36,12 @@ class Rehabilitation(Base):
     __tablename__ = "rehabilitations"
 
     id = Column(Integer, primary_key=True, index=True)
-    pda_number = Column(String(50), nullable=False)
-    departement = Column(String(120), nullable=False)
-    commune = Column(String(120), nullable=False)
-    arrondissement = Column(String(120), nullable=False)
-    village = Column(String(120), nullable=False)
-    annee_rehabilitation = Column(SmallInteger, nullable=False)
+    pda_number = Column(String(50))
+    departement = Column(String(120))
+    commune = Column(String(120))
+    arrondissement = Column(String(120))
+    village = Column(String(120))
+    annee_rehabilitation = Column(SmallInteger)
 
     brigade_name = Column(String(180))
     brigade_manager_name = Column(String(180))
@@ -49,7 +50,7 @@ class Rehabilitation(Base):
     producer_name = Column(String(180))
     producer_phone = Column(String(30))
 
-    superficie_rehabilitee = Column(Numeric(10, 2), nullable=False)
+    superficie_rehabilitee = Column(Numeric(10, 2))
     sup_class = Column(String(30), Computed(SUP_CLASS_EXPR, persisted=True))
 
     desherbage_superficie = Column(Numeric(10, 2))

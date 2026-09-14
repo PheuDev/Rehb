@@ -6,12 +6,12 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 CREATE TABLE IF NOT EXISTS rehabilitations (
     id                          SERIAL PRIMARY KEY,
-    pda_number                  VARCHAR(50)  NOT NULL,
-    departement                 VARCHAR(120) NOT NULL,
-    commune                     VARCHAR(120) NOT NULL,
-    arrondissement               VARCHAR(120) NOT NULL,
-    village                     VARCHAR(120) NOT NULL,
-    annee_rehabilitation        SMALLINT     NOT NULL CHECK (annee_rehabilitation BETWEEN 1990 AND 2100),
+    pda_number                  VARCHAR(50),
+    departement                 VARCHAR(120),
+    commune                     VARCHAR(120),
+    arrondissement               VARCHAR(120),
+    village                     VARCHAR(120),
+    annee_rehabilitation        SMALLINT     CHECK (annee_rehabilitation BETWEEN 1990 AND 2100),
 
     brigade_name                VARCHAR(180),
     brigade_manager_name        VARCHAR(180),
@@ -20,10 +20,11 @@ CREATE TABLE IF NOT EXISTS rehabilitations (
     producer_name                VARCHAR(180),
     producer_phone               VARCHAR(30),
 
-    superficie_rehabilitee      NUMERIC(10,2) NOT NULL CHECK (superficie_rehabilitee >= 0),
+    superficie_rehabilitee      NUMERIC(10,2) CHECK (superficie_rehabilitee >= 0),
 
     sup_class VARCHAR(30) GENERATED ALWAYS AS (
         CASE
+            WHEN superficie_rehabilitee IS NULL THEN NULL
             WHEN superficie_rehabilitee <= 5  THEN 'S ≤ 5 ha'
             WHEN superficie_rehabilitee <= 10 THEN '5 < S ≤ 10 ha'
             WHEN superficie_rehabilitee <= 20 THEN '10 < S ≤ 20 ha'

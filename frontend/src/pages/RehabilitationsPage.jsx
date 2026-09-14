@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, TreeDeciduous } from "lucide-react";
+import { ClipboardList, List, Plus, TreeDeciduous } from "lucide-react";
 
 import StatsCards from "../components/StatsCards.jsx";
 import FiltersBar from "../components/FiltersBar.jsx";
@@ -13,6 +13,7 @@ import Toast from "../components/Toast.jsx";
 import { useDebounce } from "../hooks/useDebounce.js";
 import {
   listRehabilitations,
+  listIncompleteRehabilitations,
   createRehabilitation,
   updateRehabilitation,
   deleteRehabilitation,
@@ -22,6 +23,7 @@ import {
   getStats,
   exportCsv,
   exportExcel,
+  exportIncompleteExcel,
 } from "../api/rehabilitations.js";
 
 const DEFAULT_FILTERS = { q: "", departement: "", commune: "", annee: "", sup_class: "" };
@@ -38,6 +40,8 @@ export default function RehabilitationsPage() {
   const [items, setItems] = useState([]);
   const [pagination, setPagination] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [activeView, setActiveView] = useState("all");
+  const [incompleteTotal, setIncompleteTotal] = useState(null);
 
   const [filterOptions, setFilterOptions] = useState(null);
   const [stats, setStats] = useState(null);
@@ -80,9 +84,12 @@ export default function RehabilitationsPage() {
   async function loadList() {
     setLoading(true);
     try {
-      const data = await listRehabilitations(queryParams);
+      const data = activeView === "incomplete"
+        ? await listIncompleteRehabilitations(queryParams)
+        : await listRehabilitations(queryParams);
       setItems(data.items);
       setPagination(data.pagination);
+      if (activeView === "incomplete") setIncompleteTotal(data.pagination.total);
     } catch (err) {
       showToast("error", "Erreur lors du chargement des fiches.");
     } finally {
@@ -114,7 +121,7 @@ export default function RehabilitationsPage() {
   useEffect(() => {
     loadList();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [queryParams]);
+  }, [queryParams, activeView]);
 
   useEffect(() => {
     loadFilterOptions();
@@ -249,7 +256,11 @@ export default function RehabilitationsPage() {
 
   async function handleExportExcel() {
     try {
-      await exportExcel(queryParams);
+      if (activeView === "incomplete") {
+        await exportIncompleteExcel(queryParams);
+      } else {
+        await exportExcel(queryParams);
+      }
     } catch (err) {
       showToast("error", "Erreur lors de l'export Excel.");
     }
@@ -286,6 +297,30 @@ export default function RehabilitationsPage() {
       <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6">
         <StatsCards stats={stats} loading={statsLoading} />
 
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-white p-2 shadow-sm">
+          <button
+            onClick={() => { setActiveView("all"); setPage(1); }}
+            className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${
+              activeView === "all" ? "bg-forest-600 text-white" : "text-gray-600 hover:bg-gray-100"
+            }`}
+          >
+            <List size={16} /> Toutes les fiches
+          </button>
+          <button
+            onClick={() => { setActiveView("incomplete"); setPage(1); }}
+            className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium ${
+              activeView === "incomplete" ? "bg-amber-500 text-white" : "text-amber-800 hover:bg-amber-50"
+            }`}
+          >
+            <ClipboardList size={16} /> Fiches à compléter{incompleteTotal !== null ? ` (${incompleteTotal})` : ""}
+          </button>
+          {activeView === "incomplete" && (
+            <p className="px-2 text-sm text-gray-500">
+              Chaque fiche liste les informations encore absentes. L'export Excel colore ces cellules en rouge.
+            </p>
+          )}
+        </div>
+
         <FiltersBar
           filters={filters}
           filterOptions={filterOptions}
@@ -295,6 +330,7 @@ export default function RehabilitationsPage() {
           onExportExcel={handleExportExcel}
           onImportExcel={() => setImportModalOpen(true)}
           onClearAll={() => setClearAllConfirm(true)}
+          completionMode={activeView === "incomplete"}
         />
 
         {selectedIds.length > 0 && (
@@ -331,6 +367,7 @@ export default function RehabilitationsPage() {
           onToggleSelect={toggleSelectItem}
           onToggleSelectAll={toggleSelectAll}
           allSelected={allCurrentPageSelected}
+          showMissingFields={activeView === "incomplete"}
         />
 
         <div className="rounded-xl border border-gray-200 bg-white shadow-sm">

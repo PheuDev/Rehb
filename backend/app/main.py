@@ -20,6 +20,61 @@ SCHEMA_FILE = Path(__file__).resolve().parent.parent / "sql" / "schema.sql"
 MAX_DB_RETRIES = 10
 DB_RETRY_DELAY = 3.0
 
+NULLABLE_COLUMNS = (
+    "pda_number",
+    "departement",
+    "commune",
+    "arrondissement",
+    "village",
+    "annee_rehabilitation",
+    "superficie_rehabilitee",
+)
+
+
+def migrate_nullable_rehabilitations() -> None:
+    """Met à niveau une base existante pour accepter les fiches partielles."""
+    if engine.dialect.name != "postgresql":
+        return
+
+    with engine.begin() as conn:
+        for column in NULLABLE_COLUMNS:
+            conn.exec_driver_sql(
+                f"ALTER TABLE rehabilitations ALTER COLUMN {column} DROP NOT NULL"
+            )
+
+        expression = conn.execute(
+            text(
+                "SELECT generation_expression FROM information_schema.columns "
+                "WHERE table_name = 'rehabilitations' AND column_name = 'sup_class'"
+            )
+        ).scalar()
+        if expression and "is null" in expression.lower():
+            return
+
+        # PostgreSQL ne permet pas de modifier l'expression d'une colonne
+        # générée : on la recrée pour gérer aussi la superficie absente.
+        conn.exec_driver_sql("DROP VIEW IF EXISTS v_rehabilitations_synthese")
+        conn.exec_driver_sql("DROP INDEX IF EXISTS ix_rehab_sup_class")
+        conn.exec_driver_sql("ALTER TABLE rehabilitations DROP COLUMN sup_class")
+        conn.exec_driver_sql(
+            "ALTER TABLE rehabilitations ADD COLUMN sup_class VARCHAR(30) "
+            "GENERATED ALWAYS AS (CASE "
+            "WHEN superficie_rehabilitee IS NULL THEN NULL "
+            "WHEN superficie_rehabilitee <= 5 THEN 'S ≤ 5 ha' "
+            "WHEN superficie_rehabilitee <= 10 THEN '5 < S ≤ 10 ha' "
+            "WHEN superficie_rehabilitee <= 20 THEN '10 < S ≤ 20 ha' "
+            "ELSE 'S > 20 ha' END) STORED"
+        )
+        conn.exec_driver_sql("CREATE INDEX ix_rehab_sup_class ON rehabilitations (sup_class)")
+        conn.exec_driver_sql(
+            "CREATE VIEW v_rehabilitations_synthese AS "
+            "SELECT id, pda_number, departement, commune, arrondissement, village, "
+            "annee_rehabilitation, brigade_name, producer_name, superficie_rehabilitee, sup_class, "
+            "(coalesce(desherbage_superficie, 0) + coalesce(eclaircie_superficie, 0) + "
+            "coalesce(elagage_superficie, 0) + coalesce(debardage_superficie, 0)) "
+            "AS superficie_totale_operations, created_at, updated_at FROM rehabilitations"
+        )
+
 
 def ensure_database_schema() -> None:
     """Attend que la base soit joignable puis applique le schéma si nécessaire.
@@ -58,6 +113,7 @@ def ensure_database_schema() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     ensure_database_schema()
+    migrate_nullable_rehabilitations()
     yield
 
 

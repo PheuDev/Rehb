@@ -5,6 +5,11 @@ export async function listRehabilitations(params) {
   return data;
 }
 
+export async function listIncompleteRehabilitations(params) {
+  const { data } = await client.get("/rehabilitations/incomplete", { params });
+  return data;
+}
+
 export async function getRehabilitation(id) {
   const { data } = await client.get(`/rehabilitations/${id}`);
   return data;
@@ -64,6 +69,11 @@ export async function exportCsv(params) {
 export async function exportExcel(params) {
   const response = await client.get("/rehabilitations/export-excel", { params, responseType: "blob" });
   downloadBlob(response.data, "rehabilitations.xlsx");
+}
+
+export async function exportIncompleteExcel(params) {
+  const response = await client.get("/rehabilitations/export-incomplete-excel", { params, responseType: "blob" });
+  downloadBlob(response.data, "fiches_a_completer.xlsx");
 }
 
 export async function downloadImportTemplate() {

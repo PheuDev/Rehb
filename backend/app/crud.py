@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Rehabilitation
 from app.schemas import RehabilitationCreate, RehabilitationUpdate
+from app.completion import incomplete_condition
 
 SORTABLE_COLUMNS = {
     "created_at": Rehabilitation.created_at,
@@ -122,6 +123,51 @@ def get_list(
     return items, pagination
 
 
+def get_incomplete_list(
+    db: Session,
+    q: Optional[str] = None,
+    departement: Optional[str] = None,
+    commune: Optional[str] = None,
+    arrondissement: Optional[str] = None,
+    village: Optional[str] = None,
+    brigade_name: Optional[str] = None,
+    annee: Optional[int] = None,
+    sup_class: Optional[str] = None,
+    page: int = 1,
+    limit: int = 10,
+    sort_by: str = "created_at",
+    sort_order: str = "desc",
+):
+    """Liste paginée des fiches ayant au moins une donnée métier manquante."""
+    base_query = _apply_filters(
+        db.query(Rehabilitation),
+        q, departement, commune, arrondissement, village, brigade_name, annee, sup_class,
+    ).filter(incomplete_condition())
+    total = base_query.count()
+    sort_column = SORTABLE_COLUMNS.get(sort_by, Rehabilitation.created_at)
+    order_fn = asc if sort_order == "asc" else desc
+    items = (
+        base_query.order_by(order_fn(sort_column))
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .all()
+    )
+    total_pages = max((total + limit - 1) // limit, 1)
+    superficie_totale = (
+        base_query.with_entities(func.coalesce(func.sum(Rehabilitation.superficie_rehabilitee), 0)).scalar()
+        or Decimal(0)
+    )
+    return items, {
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "totalPages": total_pages,
+        "hasNext": page < total_pages,
+        "hasPrev": page > 1,
+        "superficieTotale": float(superficie_totale),
+    }
+
+
 def get_by_id(db: Session, rehab_id: int) -> Optional[Rehabilitation]:
     return db.query(Rehabilitation).filter(Rehabilitation.id == rehab_id).first()
 
@@ -185,6 +231,7 @@ def get_filters(db: Session):
     annees = [
         r[0]
         for r in db.query(Rehabilitation.annee_rehabilitation)
+        .filter(Rehabilitation.annee_rehabilitation.isnot(None))
         .distinct()
         .order_by(Rehabilitation.annee_rehabilitation.desc())
         .all()
@@ -286,3 +333,20 @@ def get_all_for_export(
         q, departement, commune, arrondissement, village, brigade_name, annee, sup_class,
     )
     return query.order_by(Rehabilitation.id).all()
+
+
+def get_all_incomplete_for_export(
+    db: Session,
+    q: Optional[str] = None,
+    departement: Optional[str] = None,
+    commune: Optional[str] = None,
+    arrondissement: Optional[str] = None,
+    village: Optional[str] = None,
+    brigade_name: Optional[str] = None,
+    annee: Optional[int] = None,
+    sup_class: Optional[str] = None,
+):
+    return _apply_filters(
+        db.query(Rehabilitation),
+        q, departement, commune, arrondissement, village, brigade_name, annee, sup_class,
+    ).filter(incomplete_condition()).order_by(Rehabilitation.id).all()
