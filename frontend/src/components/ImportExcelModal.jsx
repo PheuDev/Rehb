@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { UploadCloud, FileSpreadsheet, AlertCircle, CheckCircle2 } from "lucide-react";
+import { UploadCloud, FileSpreadsheet, AlertCircle, CheckCircle2, ClipboardList } from "lucide-react";
 import { Modal } from "./ui.jsx";
 import { importExcel, downloadImportTemplate } from "../api/rehabilitations.js";
 
@@ -97,6 +97,17 @@ export default function ImportExcelModal({ open, onClose, onImported }) {
                 {result.importees} fiche(s) importée(s) avec succès sur {result.total} ligne(s) traitée(s).
               </span>
             </div>
+            {result.aCompleter > 0 && (
+              <div className="flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+                <ClipboardList size={16} className="mt-0.5 flex-shrink-0" />
+                <span>
+                  {result.aCompleter} fiche(s) contiennent des informations manquantes ou illisibles.
+                  Retrouvez-les dans l'onglet « Fiches à compléter » : vous pourrez exporter la
+                  liste en Excel, avec les emplacements vides colorés en rouge.
+                </span>
+              </div>
+            )}
+
             {result.erreurs?.length > 0 && (
               <div className="max-h-48 overflow-y-auto rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
                 <p className="mb-1 font-medium">{result.erreurs.length} ligne(s) ignorée(s) :</p>

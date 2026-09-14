@@ -7,6 +7,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app import crud, excel_utils, schemas
+from app.completion import missing_fields
 from app.dependencies import get_db
 from app.crud import SORTABLE_COLUMNS, SUP_CLASSES
 
@@ -66,6 +67,40 @@ def list_rehabilitations(
         sort_order=sortOrder,
     )
     return {"items": items, "pagination": pagination}
+
+
+@router.get("/incomplete", response_model=schemas.RehabilitationIncompleteListResponse)
+def list_incomplete_rehabilitations(
+    q: Optional[str] = Query(None, description="Recherche plein texte"),
+    departement: Optional[str] = None,
+    commune: Optional[str] = None,
+    arrondissement: Optional[str] = None,
+    village: Optional[str] = None,
+    brigade_name: Optional[str] = None,
+    annee: Optional[int] = None,
+    sup_class: Optional[str] = Query(None, description="Classe de superficie"),
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=200),
+    sortBy: str = Query("created_at"),
+    sortOrder: str = Query("desc", pattern="^(asc|desc)$"),
+    db: Session = Depends(get_db),
+):
+    """Retourne les fiches qui possèdent au moins une donnée à renseigner."""
+    if sup_class is not None and sup_class not in SUP_CLASSES:
+        raise HTTPException(status_code=400, detail="Classe de superficie invalide.")
+    if sortBy not in SORTABLE_COLUMNS:
+        raise HTTPException(status_code=400, detail="Champ de tri invalide.")
+
+    items, pagination = crud.get_incomplete_list(
+        db, q, departement, commune, arrondissement, village, brigade_name,
+        annee, sup_class, page, limit, sortBy, sortOrder,
+    )
+    response_items = []
+    for item in items:
+        data = schemas.RehabilitationOut.model_validate(item).model_dump()
+        data["missingFields"] = missing_fields(item)
+        response_items.append(data)
+    return {"items": response_items, "pagination": pagination}
 
 
 # ---------------------------------------------------------------------------
@@ -172,6 +207,25 @@ def export_excel(
     return _workbook_response(workbook, "rehabilitations.xlsx")
 
 
+@router.get("/export-incomplete-excel")
+def export_incomplete_excel(
+    q: Optional[str] = None,
+    departement: Optional[str] = None,
+    commune: Optional[str] = None,
+    arrondissement: Optional[str] = None,
+    village: Optional[str] = None,
+    brigade_name: Optional[str] = None,
+    annee: Optional[int] = None,
+    sup_class: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    rows = crud.get_all_incomplete_for_export(
+        db, q, departement, commune, arrondissement, village, brigade_name, annee, sup_class
+    )
+    workbook = excel_utils.build_incomplete_export_workbook(rows)
+    return _workbook_response(workbook, "fiches_a_completer.xlsx")
+
+
 # ---------------------------------------------------------------------------
 # Import Excel (structure identique au fichier source / au modèle téléchargeable)
 # ---------------------------------------------------------------------------
@@ -182,7 +236,7 @@ async def import_excel(file: UploadFile = File(...), db: Session = Depends(get_d
 
     content = await file.read()
     try:
-        valid_payloads, row_errors = excel_utils.parse_import_workbook(content)
+        valid_payloads, row_errors, incomplete_count = excel_utils.parse_import_workbook(content)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:  # pragma: no cover - fichier corrompu, mauvais format, etc.
@@ -199,6 +253,7 @@ async def import_excel(file: UploadFile = File(...), db: Session = Depends(get_d
     return {
         "total": len(valid_payloads) + len(row_errors),
         "importees": len(imported),
+        "aCompleter": incomplete_count,
         "erreurs": row_errors,
     }
 

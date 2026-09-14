@@ -16,6 +16,7 @@ from openpyxl.utils import get_column_letter
 from pydantic import ValidationError
 
 from app.schemas import RehabilitationCreate
+from app.completion import COMPLETION_FIELDS, is_missing, missing_fields
 
 SHEET_NAME = "REHAB-2024"
 
@@ -53,6 +54,7 @@ EXPORT_ONLY_COLUMNS: List[Tuple[str, str]] = [("SUP_CLASS", "sup_class")]
 
 HEADER_FILL = PatternFill(start_color="2D6846", end_color="2D6846", fill_type="solid")
 HEADER_FONT = Font(color="FFFFFF", bold=True)
+MISSING_FILL = PatternFill(start_color="FECACA", end_color="FECACA", fill_type="solid")
 
 
 def _normalize(label: str) -> str:
@@ -88,6 +90,7 @@ def build_template_workbook() -> Workbook:
     notes.append([])
     notes.append(["La colonne SUP_CLASS n'est pas demandée : elle est calculée automatiquement."])
     notes.append(["Ne modifiez pas les en-têtes de la feuille 'REHAB-2024' : l'import s'appuie dessus."])
+    notes.append(["Les cellules peuvent rester vides (informations pas encore disponibles) : la fiche est importée quand même et apparaît dans l'onglet « Fiches à compléter » ; son export Excel colore les emplacements vides en rouge."])
     for col_idx, width in enumerate([45, 14, 30], start=1):
         notes.column_dimensions[get_column_letter(col_idx)].width = width
     for cell in notes[1]:
@@ -124,6 +127,33 @@ def build_export_workbook(rows) -> Workbook:
     return wb
 
 
+def build_incomplete_export_workbook(rows) -> Workbook:
+    """Exporte les fiches incomplètes en colorant chaque donnée absente en rouge."""
+    wb = build_export_workbook(rows)
+    ws = wb.active
+    field_to_column = {field: index for index, (_, field, _, _) in enumerate(COLUMNS, start=1)}
+
+    # Une colonne explicite rend aussi l'export lisible sans devoir inspecter
+    # chaque cellule colorée.
+    missing_column = len(COLUMNS) + len(EXPORT_ONLY_COLUMNS) + 1
+    header = ws.cell(row=1, column=missing_column, value="INFORMATIONS À COMPLÉTER")
+    header.fill = HEADER_FILL
+    header.font = HEADER_FONT
+    header.alignment = Alignment(wrap_text=True, vertical="center")
+    ws.column_dimensions[get_column_letter(missing_column)].width = 45
+
+    for row_index, row in enumerate(rows, start=2):
+        for _, field in COMPLETION_FIELDS:
+            if is_missing(getattr(row, field, None)):
+                ws.cell(row=row_index, column=field_to_column[field]).fill = MISSING_FILL
+        ws.cell(row=row_index, column=missing_column, value=", ".join(missing_fields(row)))
+        ws.cell(row=row_index, column=missing_column).alignment = Alignment(wrap_text=True, vertical="top")
+        ws.row_dimensions[row_index].height = 42
+
+    ws.auto_filter.ref = f"A1:{get_column_letter(missing_column)}{max(ws.max_row, 1)}"
+    return wb
+
+
 # ---------------------------------------------------------------------------
 # Lecture / validation d'un fichier Excel importé
 # ---------------------------------------------------------------------------
@@ -131,20 +161,37 @@ def _convert_value(raw: Any, ftype: type):
     if raw is None or (isinstance(raw, str) and raw.strip() == ""):
         return None
     if ftype is str:
+        # Excel stocke souvent les téléphones/N° PDA en nombre : on évite le
+        # "96637137.0" en convertissant les flottants entiers.
+        if isinstance(raw, float) and raw.is_integer():
+            raw = int(raw)
         return str(raw).strip()
     if ftype is float:
         if isinstance(raw, str):
             raw = raw.replace(",", ".").strip()
+            # Saisies fréquentes : lettre "O" à la place du zéro ("2,O7").
+            if raw and not raw.isdigit():
+                raw = raw.replace("O", "0").replace("o", "0")
         return float(raw)
     if ftype is int:
         if isinstance(raw, str):
-            raw = raw.strip()
+            # Séparateurs de milliers : "2 024" (espace/insécable) -> "2024".
+            raw = raw.replace(" ", "").replace("\u00a0", "").strip()
         return int(float(raw))
     return raw
 
 
 def parse_import_workbook(content: bytes):
-    """Retourne (payloads_valides, erreurs) où erreurs = [{"ligne": int, "erreurs": [str, ...]}]."""
+    """Lit un fichier Excel importe.
+
+    Retourne (payloads_valides, erreurs, nb_a_completer).
+
+    Tolerance : une cellule vide ou illisible (format invalide, ex : « 2,O7 »)
+    ne rejette PLUS la ligne entière. La donnée est laissée vide, la valeur
+    d'origine est conservée en note dans Observations, et la fiche importée
+    est comptée dans `nb_a_completer` pour apparaître dans l'onglet
+    « Fiches à compléter » (export Excel avec cellules vides en rouge).
+    """
     wb = load_workbook(io.BytesIO(content), data_only=True)
     ws = wb[SHEET_NAME] if SHEET_NAME in wb.sheetnames else wb.active
 
@@ -155,41 +202,73 @@ def parse_import_workbook(content: bytes):
             continue
         header_index[_normalize(raw_label)] = idx
 
-    missing_required = [
-        label for label, _, _, required in COLUMNS
-        if required and _normalize(label) not in header_index
-    ]
-    if missing_required:
-        raise ValueError(
-            "Colonnes obligatoires manquantes dans le fichier : " + ", ".join(missing_required)
-        )
+    field_labels = {field: label for label, field, _, _ in COLUMNS}
 
     valid_payloads: List[RehabilitationCreate] = []
     errors = []
+    incomplete_count = 0
 
     for row_number, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
         if row is None or all(cell in (None, "") for cell in row):
             continue  # ligne vide, on l'ignore silencieusement
 
         data = {}
-        conversion_errors = []
+        avertissements = []
         for label, field, ftype, _ in COLUMNS:
             col_idx = header_index.get(_normalize(label))
             raw_value = row[col_idx] if col_idx is not None and col_idx < len(row) else None
             try:
                 data[field] = _convert_value(raw_value, ftype)
             except (ValueError, TypeError):
-                conversion_errors.append(f"Valeur invalide pour « {label} » : « {raw_value} ».")
+                data[field] = None
+                if raw_value is not None and str(raw_value).strip() != "":
+                    avertissements.append(
+                        f"{label} : valeur « {raw_value} » illisible, laissée vide."
+                    )
 
-        if conversion_errors:
-            errors.append({"ligne": row_number, "erreurs": conversion_errors})
+        # Pydantic peut encore rejeter une valeur convertie (téléphone avec
+        # caractères interdits, année hors bornes, nombre négatif...) : on
+        # neutralise le champ fautif et on réessaie, au lieu d'écarter la
+        # fiche entière.
+        payload = None
+        for _attempt in range(2):
+            try:
+                payload = RehabilitationCreate(**data)
+                break
+            except ValidationError as exc:
+                faulty_fields = [
+                    err["loc"][0]
+                    for err in exc.errors()
+                    if err.get("loc") and isinstance(err["loc"][0], str)
+                ]
+                if not faulty_fields or _attempt == 1:
+                    errors.append({
+                        "ligne": row_number,
+                        "erreurs": [err.get("msg", "Champ invalide.") for err in exc.errors()],
+                    })
+                    break
+                for field in faulty_fields:
+                    if data.get(field) not in (None, ""):
+                        avertissements.append(
+                            f"{field_labels.get(field, field)} : valeur non conforme, laissée vide."
+                        )
+                    data[field] = None
+
+        if payload is None:
             continue
 
-        try:
+        # On garde la trace des valeurs d'origine illisibles directement dans
+        # la fiche, pour que l'utilisateur sache quoi corriger et o\u00f9.
+        if avertissements:
+            note = "Import Excel - à vérifier : " + " ; ".join(avertissements)
+            data["observations"] = (
+                f"{data['observations']}\n{note}" if data.get("observations") else note
+            )
             payload = RehabilitationCreate(**data)
-            valid_payloads.append(payload)
-        except ValidationError as exc:
-            messages = [err.get("msg", "Champ invalide.") for err in exc.errors()]
-            errors.append({"ligne": row_number, "erreurs": messages})
 
-    return valid_payloads, errors
+        if missing_fields(payload):
+            incomplete_count += 1
+
+        valid_payloads.append(payload)
+
+    return valid_payloads, errors, incomplete_count

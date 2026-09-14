@@ -22,12 +22,12 @@ def _validate_phone(v: Optional[str]) -> Optional[str]:
 
 
 class RehabilitationBase(BaseModel):
-    pda_number: str = Field(..., max_length=50, description="Numéro du PDA")
-    departement: str = Field(..., max_length=120)
-    commune: str = Field(..., max_length=120)
-    arrondissement: str = Field(..., max_length=120)
-    village: str = Field(..., max_length=120)
-    annee_rehabilitation: int = Field(..., ge=1990, le=2100)
+    pda_number: Optional[str] = Field(None, max_length=50, description="Numéro du PDA")
+    departement: Optional[str] = Field(None, max_length=120)
+    commune: Optional[str] = Field(None, max_length=120)
+    arrondissement: Optional[str] = Field(None, max_length=120)
+    village: Optional[str] = Field(None, max_length=120)
+    annee_rehabilitation: Optional[int] = Field(None, ge=1990, le=2100)
 
     brigade_name: Optional[str] = Field(None, max_length=180)
     brigade_manager_name: Optional[str] = Field(None, max_length=180)
@@ -36,7 +36,7 @@ class RehabilitationBase(BaseModel):
     producer_name: Optional[str] = Field(None, max_length=180)
     producer_phone: Optional[str] = Field(None, max_length=30)
 
-    superficie_rehabilitee: Decimal = Field(..., ge=0)
+    superficie_rehabilitee: Optional[Decimal] = Field(None, ge=0)
 
     desherbage_superficie: Optional[Decimal] = Field(None, ge=0)
     desherbage_operateur_nom: Optional[str] = Field(None, max_length=180)
@@ -127,7 +127,7 @@ class RehabilitationOut(RehabilitationBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    sup_class: str
+    sup_class: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -144,6 +144,15 @@ class PaginationMeta(BaseModel):
 
 class RehabilitationListResponse(BaseModel):
     items: List[RehabilitationOut]
+    pagination: PaginationMeta
+
+
+class RehabilitationIncompleteOut(RehabilitationOut):
+    missingFields: List[str]
+
+
+class RehabilitationIncompleteListResponse(BaseModel):
+    items: List[RehabilitationIncompleteOut]
     pagination: PaginationMeta
 
 
@@ -165,6 +174,7 @@ class ImportRowError(BaseModel):
 class ImportResult(BaseModel):
     total: int
     importees: int
+    aCompleter: int = 0
     erreurs: List[ImportRowError]
 
 
