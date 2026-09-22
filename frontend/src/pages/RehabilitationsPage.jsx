@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ClipboardList, List, Plus, TreeDeciduous } from "lucide-react";
 
 import StatsCards from "../components/StatsCards.jsx";
+import Sidebar from "../components/Sidebar.jsx";
 import FiltersBar from "../components/FiltersBar.jsx";
 import RehabilitationTable from "../components/RehabilitationTable.jsx";
 import Pagination from "../components/Pagination.jsx";
@@ -21,12 +22,13 @@ import {
   clearAllRehabilitations,
   getFilters,
   getStats,
+  getBrigades,
   exportCsv,
   exportExcel,
   exportIncompleteExcel,
 } from "../api/rehabilitations.js";
 
-const DEFAULT_FILTERS = { q: "", departement: "", commune: "", annee: "", sup_class: "" };
+const DEFAULT_FILTERS = { q: "", departement: "", commune: "", annee: "", sup_class: "", brigade: "" };
 
 export default function RehabilitationsPage() {
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
@@ -46,6 +48,9 @@ export default function RehabilitationsPage() {
   const [filterOptions, setFilterOptions] = useState(null);
   const [stats, setStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(true);
+
+  const [brigades, setBrigades] = useState([]);
+  const [brigadesLoading, setBrigadesLoading] = useState(false);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
@@ -73,12 +78,13 @@ export default function RehabilitationsPage() {
       commune: filters.commune || undefined,
       annee: filters.annee || undefined,
       sup_class: filters.sup_class || undefined,
+      brigade_name: filters.brigade || undefined,
       page,
       limit,
       sortBy,
       sortOrder,
     }),
-    [debouncedQ, filters.departement, filters.commune, filters.annee, filters.sup_class, page, limit, sortBy, sortOrder]
+    [debouncedQ, filters.departement, filters.commune, filters.annee, filters.sup_class, filters.brigade, page, limit, sortBy, sortOrder]
   );
 
   async function loadList() {
@@ -118,6 +124,22 @@ export default function RehabilitationsPage() {
     }
   }
 
+  async function loadBrigades() {
+    setBrigadesLoading(true);
+    try {
+      const data = await getBrigades();
+      setBrigades(data);
+    } catch (err) {
+      // silencieux : la sidebar n'est pas critique
+    } finally {
+      setBrigadesLoading(false);
+    }
+  }
+
+  async function reloadAll() {
+    await Promise.all([loadList(), loadStats(), loadFilterOptions(), loadBrigades()]);
+  }
+
   useEffect(() => {
     loadList();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -126,11 +148,12 @@ export default function RehabilitationsPage() {
   useEffect(() => {
     loadFilterOptions();
     loadStats();
+    loadBrigades();
   }, []);
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedQ, filters.departement, filters.commune, filters.annee, filters.sup_class]);
+  }, [debouncedQ, filters.departement, filters.commune, filters.annee, filters.sup_class, filters.brigade]);
 
   useEffect(() => {
     setSelectedIds((prev) => prev.filter((id) => items.some((item) => item.id === id)));
@@ -171,7 +194,7 @@ export default function RehabilitationsPage() {
         showToast("success", "Fiche créée avec succès.");
       }
       setModalOpen(false);
-      await Promise.all([loadList(), loadStats(), loadFilterOptions()]);
+      await reloadAll();
     } catch (err) {
       const detail = err?.response?.data;
       if (detail?.erreurs) {
@@ -194,7 +217,7 @@ export default function RehabilitationsPage() {
       await deleteRehabilitation(confirmTarget.id);
       showToast("success", "Fiche supprimée avec succès.");
       setConfirmTarget(null);
-      await Promise.all([loadList(), loadStats(), loadFilterOptions()]);
+      await reloadAll();
     } catch (err) {
       showToast("error", "Erreur lors de la suppression de la fiche.");
     } finally {
@@ -210,7 +233,7 @@ export default function RehabilitationsPage() {
       showToast("success", `${bulkDeleteIds.length} fiche(s) supprimée(s) avec succès.`);
       setBulkDeleteIds([]);
       setSelectedIds([]);
-      await Promise.all([loadList(), loadStats(), loadFilterOptions()]);
+      await reloadAll();
     } catch (err) {
       showToast("error", "Erreur lors de la suppression des fiches sélectionnées.");
     } finally {
@@ -225,7 +248,7 @@ export default function RehabilitationsPage() {
       showToast("success", "Base de données vidée avec succès.");
       setClearAllConfirm(false);
       setSelectedIds([]);
-      await Promise.all([loadList(), loadStats(), loadFilterOptions()]);
+      await reloadAll();
     } catch (err) {
       showToast("error", "Erreur lors du vidage de la base de données.");
     } finally {
@@ -268,7 +291,7 @@ export default function RehabilitationsPage() {
 
   async function handleImported() {
     showToast("success", "Import terminé.");
-    await Promise.all([loadList(), loadStats(), loadFilterOptions()]);
+    await reloadAll();
   }
 
   function handleResetFilters() {
@@ -294,7 +317,16 @@ export default function RehabilitationsPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6">
+      <div className="mx-auto flex max-w-7xl items-start gap-6 px-4 py-6 sm:px-6">
+        <Sidebar
+          brigades={brigades}
+          active={filters.brigade}
+          loading={brigadesLoading}
+          onSelect={(name) => setFilters((prev) => ({ ...prev, brigade: prev.brigade === name ? "" : name }))}
+          onClear={() => setFilters((prev) => ({ ...prev, brigade: "" }))}
+        />
+
+        <main className="min-w-0 flex-1 space-y-6">
         <StatsCards stats={stats} loading={statsLoading} />
 
         <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-white p-2 shadow-sm">
@@ -374,6 +406,7 @@ export default function RehabilitationsPage() {
           <Pagination pagination={pagination} onPageChange={setPage} onLimitChange={(n) => { setLimit(n); setPage(1); }} />
         </div>
       </main>
+      </div>
 
       <RehabilitationFormModal
         open={modalOpen}

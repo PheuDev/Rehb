@@ -166,6 +166,13 @@ class FiltersResponse(BaseModel):
     supClasses: List[str]
 
 
+class BrigadeOut(BaseModel):
+    """Brigade distincte (regroupée par nom), avec son nombre de fiches."""
+
+    name: str
+    fiches: int = 0
+
+
 class ImportRowError(BaseModel):
     ligne: int
     erreurs: List[str]

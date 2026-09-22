@@ -50,6 +50,11 @@ export async function getStats() {
   return data;
 }
 
+export async function getBrigades() {
+  const { data } = await client.get("/rehabilitations/brigades");
+  return data;
+}
+
 function downloadBlob(data, filename) {
   const url = window.URL.createObjectURL(new Blob([data]));
   const link = document.createElement("a");

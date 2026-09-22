@@ -88,6 +88,7 @@ Documentation interactive : `http://localhost:8000/docs`.
 | PUT     | `/api/rehabilitations/{id}`         | Mise à jour                                    |
 | DELETE  | `/api/rehabilitations/{id}`         | Suppression                                    |
 | GET     | `/api/rehabilitations/filters`      | Valeurs distinctes pour les filtres            |
+| GET     | `/api/rehabilitations/brigades`    | Brigades disponibles, regroupées par nom (un nom = une entrée, avec son nombre de fiches) |
 | GET     | `/api/rehabilitations/stats`        | Statistiques globales et agrégats              |
 | GET     | `/api/rehabilitations/export`       | Export CSV (respecte les filtres actifs)       |
 

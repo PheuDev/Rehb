@@ -112,6 +112,21 @@ def get_filters(db: Session = Depends(get_db)):
 
 
 # ---------------------------------------------------------------------------
+# Liste des brigades disponibles (regroupées par nom)
+# ---------------------------------------------------------------------------
+# NB : route statique, à déclarer avant la route dynamique "/{rehab_id}".
+@router.get("/brigades", response_model=list[schemas.BrigadeOut])
+def list_brigades(db: Session = Depends(get_db)):
+    """Brigades distinctes regroupées par nom.
+
+    Une même brigade pouvant être enregistrée plusieurs fois avec des clés
+    primaires différentes, chaque nom n'apparaît qu'une seule fois, avec le
+    nombre de fiches qui lui sont associées.
+    """
+    return crud.get_brigades(db)
+
+
+# ---------------------------------------------------------------------------
 # Statistiques globales et agrégats
 # ---------------------------------------------------------------------------
 @router.get("/stats", response_model=schemas.StatsResponse)

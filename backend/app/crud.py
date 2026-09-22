@@ -248,6 +248,27 @@ def get_filters(db: Session):
     }
 
 
+def get_brigades(db: Session) -> list[dict]:
+    """Liste des brigades disponibles, regroupées par nom.
+
+    Pour des raisons historiques de conflit, une même brigade peut être
+    enregistrée plusieurs fois dans `rehabilitations` (clés primaires
+    différentes). Regrouper par ``brigade_name`` garantit qu'un nom ne
+    s'affiche qu'une seule fois, accompagné de son nombre de fiches.
+    """
+    rows = (
+        db.query(
+            Rehabilitation.brigade_name,
+            func.count(Rehabilitation.id),
+        )
+        .filter(Rehabilitation.brigade_name.isnot(None), Rehabilitation.brigade_name != "")
+        .group_by(Rehabilitation.brigade_name)
+        .order_by(func.lower(Rehabilitation.brigade_name))
+        .all()
+    )
+    return [{"name": name, "fiches": count} for name, count in rows]
+
+
 def get_stats(db: Session):
     total_fiches = db.query(func.count(Rehabilitation.id)).scalar() or 0
     superficie_totale = float(
