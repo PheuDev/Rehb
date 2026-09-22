@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ClipboardList, List, Plus, TreeDeciduous } from "lucide-react";
+import { ClipboardList, List, Menu, Plus, TreeDeciduous, X } from "lucide-react";
 
 import StatsCards from "../components/StatsCards.jsx";
 import Sidebar from "../components/Sidebar.jsx";
@@ -51,6 +51,8 @@ export default function RehabilitationsPage() {
 
   const [brigades, setBrigades] = useState([]);
   const [brigadesLoading, setBrigadesLoading] = useState(false);
+
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
@@ -303,6 +305,13 @@ export default function RehabilitationsPage() {
       <header className="border-b bg-white">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-5 sm:px-6">
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSidebarOpen((v) => !v)}
+              className="rounded-lg border border-gray-300 bg-white p-2 text-gray-600 hover:bg-gray-100"
+              title={sidebarOpen ? "Replier le menu" : "Ouvrir le menu"}
+            >
+              {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
+            </button>
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-forest-600 text-white">
               <TreeDeciduous size={22} />
             </div>
@@ -318,13 +327,16 @@ export default function RehabilitationsPage() {
       </header>
 
       <div className="mx-auto flex max-w-7xl items-start gap-6 px-4 py-6 sm:px-6">
-        <Sidebar
-          brigades={brigades}
-          active={filters.brigade}
-          loading={brigadesLoading}
-          onSelect={(name) => setFilters((prev) => ({ ...prev, brigade: prev.brigade === name ? "" : name }))}
-          onClear={() => setFilters((prev) => ({ ...prev, brigade: "" }))}
-        />
+        {sidebarOpen && (
+          <Sidebar
+            brigades={brigades}
+            active={filters.brigade}
+            loading={brigadesLoading}
+            onSelect={(name) => setFilters((prev) => ({ ...prev, brigade: prev.brigade === name ? "" : name }))}
+            onClear={() => setFilters((prev) => ({ ...prev, brigade: "" }))}
+            onClose={() => setSidebarOpen(false)}
+          />
+        )}
 
         <main className="min-w-0 flex-1 space-y-6">
         <StatsCards stats={stats} loading={statsLoading} />
