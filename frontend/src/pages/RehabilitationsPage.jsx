@@ -29,7 +29,7 @@ import {
   exportIncompleteExcel,
 } from "../api/rehabilitations.js";
 
-const DEFAULT_FILTERS = { q: "", departement: "", commune: "", annee: "", sup_class: "", brigade: "" };
+const DEFAULT_FILTERS = { q: "", departement: "", commune: "", village: "", annee: "", sup_class: "", brigade: "" };
 
 export default function RehabilitationsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -93,6 +93,7 @@ export default function RehabilitationsPage() {
       q: debouncedQ || undefined,
       departement: filters.departement || undefined,
       commune: filters.commune || undefined,
+      village: filters.village || undefined,
       annee: filters.annee || undefined,
       sup_class: filters.sup_class || undefined,
       brigade_name: filters.brigade || undefined,
@@ -101,7 +102,7 @@ export default function RehabilitationsPage() {
       sortBy,
       sortOrder,
     }),
-    [debouncedQ, filters.departement, filters.commune, filters.annee, filters.sup_class, filters.brigade, page, limit, sortBy, sortOrder]
+    [debouncedQ, filters.departement, filters.commune, filters.village, filters.annee, filters.sup_class, filters.brigade, page, limit, sortBy, sortOrder]
   );
 
   async function loadList() {
@@ -158,7 +159,7 @@ export default function RehabilitationsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedQ, filters.departement, filters.commune, filters.annee, filters.sup_class, filters.brigade]);
+  }, [debouncedQ, filters.departement, filters.commune, filters.village, filters.annee, filters.sup_class, filters.brigade]);
 
   useEffect(() => {
     setSelectedIds((prev) => prev.filter((id) => items.some((item) => item.id === id)));
@@ -391,6 +392,9 @@ export default function RehabilitationsPage() {
             onImportExcel={() => setImportModalOpen(true)}
             onClearAll={() => setClearAllConfirm(true)}
             completionMode={activeView === "incomplete"}
+            sortBy={sortBy}
+            sortOrder={sortOrder}
+            onSort={handleSort}
           />
 
           {selectedIds.length > 0 && (
