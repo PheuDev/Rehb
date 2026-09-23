@@ -269,6 +269,65 @@ def get_brigades(db: Session) -> list[dict]:
     return [{"name": name, "fiches": count} for name, count in rows]
 
 
+def get_departements(db: Session, q: Optional[str] = None) -> dict:
+    """Liste des départements avec agrégats : fiches, superficie, communes, villages, brigades, années."""
+    query = db.query(Rehabilitation).filter(
+        Rehabilitation.departement.isnot(None),
+        Rehabilitation.departement != "",
+    )
+    if q:
+        like = f"%{q}%"
+        query = query.filter(Rehabilitation.departement.ilike(like))
+
+    rows = query.order_by(func.lower(Rehabilitation.departement)).all()
+
+    depts: dict[str, dict] = {}
+    for r in rows:
+        key = r.departement
+        if key not in depts:
+            depts[key] = {
+                "departement": key,
+                "fiches": 0,
+                "superficie_totale": 0.0,
+                "communes": set(),
+                "arrondissements": set(),
+                "villages": set(),
+                "brigades": set(),
+                "annees": set(),
+            }
+        d = depts[key]
+        d["fiches"] += 1
+        if r.superficie_rehabilitee is not None:
+            d["superficie_totale"] += float(r.superficie_rehabilitee)
+        if r.commune:
+            d["communes"].add(r.commune)
+        if r.arrondissement:
+            d["arrondissements"].add(r.arrondissement)
+        if r.village:
+            d["villages"].add(r.village)
+        if r.brigade_name:
+            d["brigades"].add(r.brigade_name)
+        if r.annee_rehabilitation:
+            d["annees"].add(r.annee_rehabilitation)
+
+    items = [
+        {
+            "departement": d["departement"],
+            "fiches": d["fiches"],
+            "superficie_totale": round(d["superficie_totale"], 2),
+            "nb_communes": len(d["communes"]),
+            "nb_arrondissements": len(d["arrondissements"]),
+            "nb_villages": len(d["villages"]),
+            "communes": sorted(d["communes"]),
+            "brigades": sorted(d["brigades"]),
+            "annees": sorted(d["annees"]),
+        }
+        for d in depts.values()
+    ]
+
+    return {"items": items, "total": len(items)}
+
+
 def get_producers(db: Session, q: Optional[str] = None) -> dict:
     """Liste des producteurs distincts, regroupés par nom.
 

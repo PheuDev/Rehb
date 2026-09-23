@@ -34,15 +34,17 @@ const DEFAULT_FILTERS = { q: "", departement: "", commune: "", annee: "", sup_cl
 export default function RehabilitationsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // Initialise le filtre brigade depuis l'URL (?brigade=...) si présent
+  // Initialise les filtres depuis l'URL (?brigade=..., ?departement=..., ?q=...) si présents
   const [filters, setFilters] = useState(() => {
     const brigadeFromUrl = searchParams.get("brigade") || "";
-    return { ...DEFAULT_FILTERS, brigade: brigadeFromUrl };
+    const departementFromUrl = searchParams.get("departement") || "";
+    const qFromUrl = searchParams.get("q") || "";
+    return { ...DEFAULT_FILTERS, brigade: brigadeFromUrl, departement: departementFromUrl, q: qFromUrl };
   });
 
-  // Nettoie le paramètre URL brigade après l'avoir consommé
+  // Nettoie les paramètres URL après les avoir consommés
   useEffect(() => {
-    if (searchParams.has("brigade")) {
+    if (searchParams.has("brigade") || searchParams.has("departement") || searchParams.has("q")) {
       setSearchParams({}, { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -328,6 +330,18 @@ export default function RehabilitationsPage() {
               <button
                 onClick={() => setFilters((prev) => ({ ...prev, brigade: "" }))}
                 className="ml-auto rounded px-2 py-0.5 text-xs font-medium text-forest-700 hover:bg-forest-100"
+              >
+                Retirer le filtre ✕
+              </button>
+            </div>
+          )}
+
+          {filters.departement && (
+            <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+              <span>Département filtré&nbsp;: <strong>{filters.departement}</strong></span>
+              <button
+                onClick={() => setFilters((prev) => ({ ...prev, departement: "" }))}
+                className="ml-auto rounded px-2 py-0.5 text-xs font-medium text-amber-700 hover:bg-amber-100"
               >
                 Retirer le filtre ✕
               </button>

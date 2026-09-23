@@ -99,3 +99,8 @@ export async function getProducers(params) {
   const { data } = await client.get("/rehabilitations/producteurs", { params });
   return data;
 }
+
+export async function getDepartements(params) {
+  const { data } = await client.get("/rehabilitations/departements", { params });
+  return data;
+}

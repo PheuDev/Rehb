@@ -173,6 +173,25 @@ class BrigadeOut(BaseModel):
     fiches: int = 0
 
 
+class DepartementOut(BaseModel):
+    """Département avec ses agrégats."""
+
+    departement: str
+    fiches: int = 0
+    superficie_totale: float = 0.0
+    nb_communes: int = 0
+    nb_arrondissements: int = 0
+    nb_villages: int = 0
+    communes: List[str] = []
+    brigades: List[str] = []
+    annees: List[int] = []
+
+
+class DepartementListResponse(BaseModel):
+    items: List[DepartementOut]
+    total: int
+
+
 class ProducerOut(BaseModel):
     """Producteur distinct (regroupé par nom), avec ses informations agrégées."""
 

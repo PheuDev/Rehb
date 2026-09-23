@@ -3,6 +3,7 @@ import RehabilitationsPage from "./pages/RehabilitationsPage.jsx";
 import BrigadesPage from "./pages/BrigadesPage.jsx";
 import DashboardPage from "./pages/DashboardPage.jsx";
 import ProducersPage from "./pages/ProducersPage.jsx";
+import DepartementsPage from "./pages/DepartementsPage.jsx";
 
 export default function App() {
   return (
@@ -12,6 +13,7 @@ export default function App() {
         <Route path="/brigades" element={<BrigadesPage />} />
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/producteurs" element={<ProducersPage />} />
+        <Route path="/departements" element={<DepartementsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

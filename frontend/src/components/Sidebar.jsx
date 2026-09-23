@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from "react-router-dom";
-import { BarChart3, ChevronLeft, Home, Menu, Users, Leaf } from "lucide-react";
+import { BarChart3, ChevronLeft, Home, MapPin, Menu, Users, Leaf } from "lucide-react";
 
 function NavButton({ active, onClick, icon, label, right = null }) {
   return (
@@ -75,6 +75,14 @@ export default function Sidebar({ onClose }) {
             onClick={() => navigate("/producteurs")}
             icon={<Leaf size={16} />}
             label="Liste des producteurs"
+          />
+        </li>
+        <li>
+          <NavButton
+            active={pathname === "/departements"}
+            onClick={() => navigate("/departements")}
+            icon={<MapPin size={16} />}
+            label="Liste des départements"
           />
         </li>
       </ul>

@@ -127,6 +127,18 @@ def list_brigades(db: Session = Depends(get_db)):
 
 
 # ---------------------------------------------------------------------------
+# Liste des départements
+# ---------------------------------------------------------------------------
+@router.get("/departements", response_model=schemas.DepartementListResponse)
+def list_departements(
+    q: Optional[str] = Query(None, description="Recherche par nom de département"),
+    db: Session = Depends(get_db),
+):
+    """Départements distincts avec leurs agrégats (fiches, superficie, communes…)."""
+    return crud.get_departements(db, q=q)
+
+
+# ---------------------------------------------------------------------------
 # Liste des producteurs (regroupés par nom)
 # ---------------------------------------------------------------------------
 @router.get("/producteurs", response_model=schemas.ProducerListResponse)
