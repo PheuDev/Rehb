@@ -173,6 +173,28 @@ class BrigadeOut(BaseModel):
     fiches: int = 0
 
 
+class BrigadeDetailOut(BaseModel):
+    """Brigade avec toutes ses informations agrégées."""
+
+    brigade_name: str
+    manager_name: Optional[str] = None
+    manager_phone: Optional[str] = None
+    fiches: int = 0
+    superficie_totale: float = 0.0
+    nb_departements: int = 0
+    nb_communes: int = 0
+    nb_villages: int = 0
+    departements: List[str] = []
+    communes: List[str] = []
+    villages: List[str] = []
+    annees: List[int] = []
+
+
+class BrigadeDetailListResponse(BaseModel):
+    items: List[BrigadeDetailOut]
+    total: int
+
+
 class DepartementOut(BaseModel):
     """Département avec ses agrégats."""
 

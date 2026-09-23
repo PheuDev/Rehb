@@ -116,3 +116,8 @@ export async function exportAuditExcel() {
   });
   downloadBlob(response.data, "plan_audit_superficies.xlsx");
 }
+
+export async function getBrigadesDetail(params) {
+  const { data } = await client.get("/rehabilitations/brigades-detail", { params });
+  return data;
+}

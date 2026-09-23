@@ -278,6 +278,85 @@ def get_brigades(db: Session) -> list[dict]:
     return [{"name": name, "fiches": count} for name, count in rows]
 
 
+def get_brigades_detail(db: Session, q: Optional[str] = None) -> dict:
+    """Liste détaillée des brigades avec toutes les informations agrégées.
+
+    Pour chaque brigade : nom, responsable (nom + téléphone), nombre de fiches,
+    superficie totale, départements, communes, villages, années actives.
+    """
+    query = db.query(Rehabilitation).filter(
+        Rehabilitation.brigade_name.isnot(None),
+        Rehabilitation.brigade_name != "",
+    )
+    if q:
+        like = f"%{q}%"
+        query = query.filter(
+            or_(
+                Rehabilitation.brigade_name.ilike(like),
+                Rehabilitation.brigade_manager_name.ilike(like),
+                Rehabilitation.brigade_manager_phone.ilike(like),
+                Rehabilitation.departement.ilike(like),
+                Rehabilitation.commune.ilike(like),
+                Rehabilitation.village.ilike(like),
+            )
+        )
+
+    rows = query.order_by(func.lower(Rehabilitation.brigade_name)).all()
+
+    brigades: dict[str, dict] = {}
+    for r in rows:
+        key = r.brigade_name
+        if key not in brigades:
+            brigades[key] = {
+                "brigade_name": key,
+                "manager_name": None,
+                "manager_phone": None,
+                "fiches": 0,
+                "superficie_totale": 0.0,
+                "departements": set(),
+                "communes": set(),
+                "villages": set(),
+                "annees": set(),
+            }
+        b = brigades[key]
+        b["fiches"] += 1
+        # On prend le premier responsable non vide rencontré
+        if not b["manager_name"] and r.brigade_manager_name:
+            b["manager_name"] = r.brigade_manager_name
+        if not b["manager_phone"] and r.brigade_manager_phone:
+            b["manager_phone"] = r.brigade_manager_phone
+        if r.superficie_rehabilitee is not None:
+            b["superficie_totale"] += float(r.superficie_rehabilitee)
+        if r.departement:
+            b["departements"].add(r.departement)
+        if r.commune:
+            b["communes"].add(r.commune)
+        if r.village:
+            b["villages"].add(r.village)
+        if r.annee_rehabilitation:
+            b["annees"].add(r.annee_rehabilitation)
+
+    items = [
+        {
+            "brigade_name": b["brigade_name"],
+            "manager_name": b["manager_name"],
+            "manager_phone": b["manager_phone"],
+            "fiches": b["fiches"],
+            "superficie_totale": round(b["superficie_totale"], 2),
+            "nb_departements": len(b["departements"]),
+            "nb_communes": len(b["communes"]),
+            "nb_villages": len(b["villages"]),
+            "departements": sorted(b["departements"]),
+            "communes": sorted(b["communes"]),
+            "villages": sorted(b["villages"]),
+            "annees": sorted(b["annees"]),
+        }
+        for b in brigades.values()
+    ]
+
+    return {"items": items, "total": len(items)}
+
+
 
 # ─── Audit superficies ────────────────────────────────────────────────────────
 
