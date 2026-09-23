@@ -2,6 +2,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import {
   BarChart3,
   ChevronLeft,
+  ClipboardCheck,
   Home,
   Leaf,
   MapPin,
@@ -16,6 +17,7 @@ const NAV_SECTIONS = [
     items: [
       { path: "/",          icon: Home,      label: "Accueil",           accent: "bg-forest-100 text-forest-700"  },
       { path: "/dashboard", icon: BarChart3,  label: "Dashboard",         accent: "bg-sky-100 text-sky-700"        },
+      { path: "/audit-superficie", icon: ClipboardCheck, label: "Superficie à Audité", accent: "bg-violet-100 text-violet-700" },
     ],
   },
   {
