@@ -23,8 +23,12 @@ export function formatDate(value) {
 export function computeSupClass(superficie) {
   const s = Number(superficie);
   if (Number.isNaN(s)) return "—";
-  if (s <= 5) return "S ≤ 5 ha";
-  if (s <= 10) return "5 < S ≤ 10 ha";
-  if (s <= 20) return "10 < S ≤ 20 ha";
-  return "S > 20 ha";
+  if (s < 1) return "S < 1 ha";
+  if (s < 2) return "1 ≤ S < 2 ha";
+  if (s < 3) return "2 ≤ S < 3 ha";
+  if (s < 5) return "3 ≤ S < 5 ha";
+  if (s < 10) return "5 ≤ S < 10 ha";
+  if (s < 20) return "10 ≤ S < 20 ha";
+  if (s <= 30) return "20 ≤ S ≤ 30 ha";
+  return "S > 30 ha";
 }

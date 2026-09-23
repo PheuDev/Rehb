@@ -60,10 +60,14 @@ def migrate_nullable_rehabilitations() -> None:
             "ALTER TABLE rehabilitations ADD COLUMN sup_class VARCHAR(30) "
             "GENERATED ALWAYS AS (CASE "
             "WHEN superficie_rehabilitee IS NULL THEN NULL "
-            "WHEN superficie_rehabilitee <= 5 THEN 'S ≤ 5 ha' "
-            "WHEN superficie_rehabilitee <= 10 THEN '5 < S ≤ 10 ha' "
-            "WHEN superficie_rehabilitee <= 20 THEN '10 < S ≤ 20 ha' "
-            "ELSE 'S > 20 ha' END) STORED"
+            "WHEN superficie_rehabilitee < 1 THEN 'S < 1 ha' "
+            "WHEN superficie_rehabilitee < 2 THEN '1 ≤ S < 2 ha' "
+            "WHEN superficie_rehabilitee < 3 THEN '2 ≤ S < 3 ha' "
+            "WHEN superficie_rehabilitee < 5 THEN '3 ≤ S < 5 ha' "
+            "WHEN superficie_rehabilitee < 10 THEN '5 ≤ S < 10 ha' "
+            "WHEN superficie_rehabilitee < 20 THEN '10 ≤ S < 20 ha' "
+            "WHEN superficie_rehabilitee <= 30 THEN '20 ≤ S ≤ 30 ha' "
+            "ELSE 'S > 30 ha' END) STORED"
         )
         conn.exec_driver_sql("CREATE INDEX ix_rehab_sup_class ON rehabilitations (sup_class)")
         conn.exec_driver_sql(

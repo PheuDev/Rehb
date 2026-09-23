@@ -25,10 +25,14 @@ CREATE TABLE IF NOT EXISTS rehabilitations (
     sup_class VARCHAR(30) GENERATED ALWAYS AS (
         CASE
             WHEN superficie_rehabilitee IS NULL THEN NULL
-            WHEN superficie_rehabilitee <= 5  THEN 'S ≤ 5 ha'
-            WHEN superficie_rehabilitee <= 10 THEN '5 < S ≤ 10 ha'
-            WHEN superficie_rehabilitee <= 20 THEN '10 < S ≤ 20 ha'
-            ELSE 'S > 20 ha'
+            WHEN superficie_rehabilitee < 1 THEN 'S < 1 ha'
+            WHEN superficie_rehabilitee < 2 THEN '1 ≤ S < 2 ha'
+            WHEN superficie_rehabilitee < 3 THEN '2 ≤ S < 3 ha'
+            WHEN superficie_rehabilitee < 5 THEN '3 ≤ S < 5 ha'
+            WHEN superficie_rehabilitee < 10 THEN '5 ≤ S < 10 ha'
+            WHEN superficie_rehabilitee < 20 THEN '10 ≤ S < 20 ha'
+            WHEN superficie_rehabilitee <= 30 THEN '20 ≤ S ≤ 30 ha'
+            ELSE 'S > 30 ha'
         END
     ) STORED,
 

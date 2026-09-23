@@ -214,7 +214,16 @@ function LineAnnee({ data }) {
 // ─── Doughnut — par classe de superficie ─────────────────────────────────────
 function DoughnutSupClass({ data }) {
   // Ordre fixe des classes
-  const ORDER = ["S ≤ 5 ha", "5 < S ≤ 10 ha", "10 < S ≤ 20 ha", "S > 20 ha"];
+  const ORDER = [
+    "S < 1 ha",
+    "1 ≤ S < 2 ha",
+    "2 ≤ S < 3 ha",
+    "3 ≤ S < 5 ha",
+    "5 ≤ S < 10 ha",
+    "10 ≤ S < 20 ha",
+    "20 ≤ S ≤ 30 ha",
+    "S > 30 ha",
+  ];
   const sorted = ORDER.map((cls) => data.find((d) => d.supClass === cls) ?? { supClass: cls, fiches: 0, superficie: 0 });
 
   const chartData = {

@@ -23,7 +23,16 @@ SORTABLE_COLUMNS = {
     "producer_name": Rehabilitation.producer_name,
 }
 
-SUP_CLASSES = ["S ≤ 5 ha", "5 < S ≤ 10 ha", "10 < S ≤ 20 ha", "S > 20 ha"]
+SUP_CLASSES = [
+    "S < 1 ha",
+    "1 ≤ S < 2 ha",
+    "2 ≤ S < 3 ha",
+    "3 ≤ S < 5 ha",
+    "5 ≤ S < 10 ha",
+    "10 ≤ S < 20 ha",
+    "20 ≤ S ≤ 30 ha",
+    "S > 30 ha",
+]
 
 
 def _apply_filters(

@@ -1,10 +1,23 @@
-export const SUP_CLASSES = ["S ≤ 5 ha", "5 < S ≤ 10 ha", "10 < S ≤ 20 ha", "S > 20 ha"];
+export const SUP_CLASSES = [
+  "S < 1 ha",
+  "1 ≤ S < 2 ha",
+  "2 ≤ S < 3 ha",
+  "3 ≤ S < 5 ha",
+  "5 ≤ S < 10 ha",
+  "10 ≤ S < 20 ha",
+  "20 ≤ S ≤ 30 ha",
+  "S > 30 ha",
+];
 
 export const SUP_CLASS_COLORS = {
-  "S ≤ 5 ha": "bg-gray-100 text-gray-700",
-  "5 < S ≤ 10 ha": "bg-forest-100 text-forest-700",
-  "10 < S ≤ 20 ha": "bg-amber-100 text-amber-700",
-  "S > 20 ha": "bg-emerald-100 text-emerald-800",
+  "S < 1 ha": "bg-gray-100 text-gray-700",
+  "1 ≤ S < 2 ha": "bg-forest-100 text-forest-700",
+  "2 ≤ S < 3 ha": "bg-amber-100 text-amber-700",
+  "3 ≤ S < 5 ha": "bg-emerald-100 text-emerald-800",
+  "5 ≤ S < 10 ha": "bg-sky-100 text-sky-700",
+  "10 ≤ S < 20 ha": "bg-violet-100 text-violet-700",
+  "20 ≤ S ≤ 30 ha": "bg-rose-100 text-rose-700",
+  "S > 30 ha": "bg-indigo-100 text-indigo-700",
 };
 
 export const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];

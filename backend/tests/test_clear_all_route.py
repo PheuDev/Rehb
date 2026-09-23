@@ -93,3 +93,39 @@ def test_delete_all_on_empty_table_returns_200():
     resp = client.delete("/api/rehabilitations/all")
     assert resp.status_code == 200
     assert resp.json()["deleted"] == 0
+
+
+def test_surface_classification_uses_the_8_required_ranges():
+    client, session_factory = make_client()
+    cases = [
+        (0.5, "S < 1 ha"),
+        (1.0, "1 ≤ S < 2 ha"),
+        (2.0, "2 ≤ S < 3 ha"),
+        (3.0, "3 ≤ S < 5 ha"),
+        (5.0, "5 ≤ S < 10 ha"),
+        (10.0, "10 ≤ S < 20 ha"),
+        (20.0, "20 ≤ S ≤ 30 ha"),
+        (31.0, "S > 30 ha"),
+    ]
+
+    with session_factory() as db:
+        for i, (surface, _expected_label) in enumerate(cases, start=1):
+            db.add(Rehabilitation(**{**BASE_ROW, "pda_number": f"PDA-CLASS-{i}", "superficie_rehabilitee": surface}))
+        db.commit()
+
+    resp = client.get("/api/rehabilitations?limit=50")
+    assert resp.status_code == 200
+
+    actual = {item["pda_number"]: item["sup_class"] for item in resp.json()["items"]}
+    expected = {
+        "PDA-CLASS-1": "S < 1 ha",
+        "PDA-CLASS-2": "1 ≤ S < 2 ha",
+        "PDA-CLASS-3": "2 ≤ S < 3 ha",
+        "PDA-CLASS-4": "3 ≤ S < 5 ha",
+        "PDA-CLASS-5": "5 ≤ S < 10 ha",
+        "PDA-CLASS-6": "10 ≤ S < 20 ha",
+        "PDA-CLASS-7": "20 ≤ S ≤ 30 ha",
+        "PDA-CLASS-8": "S > 30 ha",
+    }
+
+    assert actual == expected
