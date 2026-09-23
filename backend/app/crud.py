@@ -325,6 +325,24 @@ def get_stats(db: Session):
         )
     ]
 
+    par_brigade = [
+        {"brigade": row[0], "fiches": row[1], "superficie": float(row[2] or 0)}
+        for row in (
+            db.query(
+                Rehabilitation.brigade_name,
+                func.count(Rehabilitation.id),
+                func.sum(Rehabilitation.superficie_rehabilitee),
+            )
+            .filter(
+                Rehabilitation.brigade_name.isnot(None),
+                Rehabilitation.brigade_name != "",
+            )
+            .group_by(Rehabilitation.brigade_name)
+            .order_by(func.count(Rehabilitation.id).desc())
+            .all()
+        )
+    ]
+
     return {
         "totalFiches": total_fiches,
         "superficieTotale": superficie_totale,
@@ -335,6 +353,7 @@ def get_stats(db: Session):
         "parDepartement": par_departement,
         "parAnnee": par_annee,
         "parSupClass": par_sup_class,
+        "parBrigade": par_brigade,
     }
 
 

@@ -55,11 +55,10 @@ export default function Sidebar({ onClose }) {
         </li>
         <li>
           <NavButton
-            active={false}
-            onClick={() => {}}
+            active={pathname === "/dashboard"}
+            onClick={() => navigate("/dashboard")}
             icon={<BarChart3 size={16} />}
             label="Dashboard"
-            right={<span className="badge bg-amber-100 text-amber-800">Bientôt</span>}
           />
         </li>
         <li>

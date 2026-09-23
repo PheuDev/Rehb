@@ -199,3 +199,4 @@ class StatsResponse(BaseModel):
     parDepartement: List[Dict[str, Any]]
     parAnnee: List[Dict[str, Any]]
     parSupClass: List[Dict[str, Any]]
+    parBrigade: List[Dict[str, Any]]

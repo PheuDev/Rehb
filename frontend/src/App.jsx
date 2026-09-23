@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import RehabilitationsPage from "./pages/RehabilitationsPage.jsx";
 import BrigadesPage from "./pages/BrigadesPage.jsx";
+import DashboardPage from "./pages/DashboardPage.jsx";
 
 export default function App() {
   return (
@@ -8,6 +9,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<RehabilitationsPage />} />
         <Route path="/brigades" element={<BrigadesPage />} />
+        <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
