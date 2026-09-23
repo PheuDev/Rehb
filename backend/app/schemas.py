@@ -236,3 +236,36 @@ class StatsResponse(BaseModel):
     parAnnee: List[Dict[str, Any]]
     parSupClass: List[Dict[str, Any]]
     parBrigade: List[Dict[str, Any]]
+
+
+class AuditFicheOut(BaseModel):
+    """Fiche sélectionnée pour l'audit."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    pda_number: Optional[str] = None
+    departement: Optional[str] = None
+    commune: Optional[str] = None
+    arrondissement: Optional[str] = None
+    village: Optional[str] = None
+    brigade_name: Optional[str] = None
+    producer_name: Optional[str] = None
+    superficie_rehabilitee: Optional[float] = None
+    annee_rehabilitation: Optional[int] = None
+    audit_classe: Optional[str] = None  # calculé côté endpoint
+
+
+class AuditClasseSyntheseOut(BaseModel):
+    classe: str
+    fiches: int
+    superficie: float
+    nb_brigades: int
+
+
+class AuditSampleResponse(BaseModel):
+    fiches: List[AuditFicheOut]
+    total_fiches: int
+    superficie_echantillon: float
+    superficie_totale: float
+    pourcentage_couverture: float
+    par_classe: List[AuditClasseSyntheseOut]

@@ -13,9 +13,9 @@ export default function App() {
         <Route path="/" element={<RehabilitationsPage />} />
         <Route path="/brigades" element={<BrigadesPage />} />
         <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/audit-superficie" element={<AuditSuperficiePage />} />
         <Route path="/producteurs" element={<ProducersPage />} />
         <Route path="/departements" element={<DepartementsPage />} />
+        <Route path="/audit" element={<AuditSuperficiePage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

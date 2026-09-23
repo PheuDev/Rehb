@@ -13,19 +13,24 @@ import {
 // ─── Définition des sections de navigation ────────────────────────────────────
 const NAV_SECTIONS = [
   {
-    label: null, // pas de titre pour la section principale
+    label: null,
     items: [
-      { path: "/",          icon: Home,      label: "Accueil",           accent: "bg-forest-100 text-forest-700"  },
-      { path: "/dashboard", icon: BarChart3,  label: "Dashboard",         accent: "bg-sky-100 text-sky-700"        },
-      { path: "/audit-superficie", icon: ClipboardCheck, label: "Superficie à Audité", accent: "bg-violet-100 text-violet-700" },
+      { path: "/",          icon: Home,      label: "Accueil",   accent: "bg-forest-100 text-forest-700" },
+      { path: "/dashboard", icon: BarChart3, label: "Dashboard", accent: "bg-sky-100 text-sky-700"       },
     ],
   },
   {
     label: "Répertoires",
     items: [
-      { path: "/brigades",     icon: Users,      label: "Brigades",      accent: "bg-forest-100 text-forest-700" },
-      { path: "/producteurs",  icon: Leaf,       label: "Producteurs",   accent: "bg-emerald-100 text-emerald-700" },
-      { path: "/departements", icon: MapPin,     label: "Départements",  accent: "bg-amber-100 text-amber-700"   },
+      { path: "/brigades",     icon: Users,  label: "Brigades",      accent: "bg-forest-100 text-forest-700"  },
+      { path: "/producteurs",  icon: Leaf,   label: "Producteurs",   accent: "bg-emerald-100 text-emerald-700" },
+      { path: "/departements", icon: MapPin, label: "Départements",  accent: "bg-amber-100 text-amber-700"    },
+    ],
+  },
+  {
+    label: "Outils",
+    items: [
+      { path: "/audit", icon: ClipboardCheck, label: "Superficie à Auditer", accent: "bg-violet-100 text-violet-700" },
     ],
   },
 ];

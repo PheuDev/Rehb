@@ -104,3 +104,15 @@ export async function getDepartements(params) {
   const { data } = await client.get("/rehabilitations/departements", { params });
   return data;
 }
+
+export async function getAuditSample() {
+  const { data } = await client.get("/rehabilitations/audit-sample");
+  return data;
+}
+
+export async function exportAuditExcel() {
+  const response = await client.get("/rehabilitations/audit-sample/export-excel", {
+    responseType: "blob",
+  });
+  downloadBlob(response.data, "plan_audit_superficies.xlsx");
+}

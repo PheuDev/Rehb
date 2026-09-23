@@ -278,6 +278,136 @@ def get_brigades(db: Session) -> list[dict]:
     return [{"name": name, "fiches": count} for name, count in rows]
 
 
+
+# ─── Audit superficies ────────────────────────────────────────────────────────
+
+AUDIT_CLASSES = [
+    ("S < 1 ha",        None,  1.0),
+    ("1 ≤ S < 2 ha",    1.0,   2.0),
+    ("2 ≤ S < 3 ha",    2.0,   3.0),
+    ("3 ≤ S < 5 ha",    3.0,   5.0),
+    ("5 ≤ S < 10 ha",   5.0,  10.0),
+    ("10 ≤ S < 20 ha", 10.0,  20.0),
+    ("20 ≤ S ≤ 30 ha", 20.0,  30.0),
+    ("S > 30 ha",      30.0,  None),
+]
+
+
+def _audit_class(superficie: float) -> str:
+    """Retourne le label de classe d'audit pour une superficie donnée."""
+    for label, low, high in AUDIT_CLASSES:
+        above = (low is None) or (superficie >= low)
+        below = (high is None) or (superficie < high) or (high == 30.0 and superficie <= 30.0)
+        if above and below:
+            return label
+    return "S > 30 ha"
+
+
+def get_audit_sample(db: Session) -> dict:
+    """Génère un plan d'échantillonnage aléatoire pour l'audit des superficies.
+
+    Contraintes satisfaites :
+    - Toutes les classes présentes dans la DB sont représentées.
+    - Toutes les brigades de chaque classe sont représentées.
+    - Au moins 1 fiche par brigade par classe.
+    - Superficie totale sélectionnée ≥ 20 % de la superficie totale du système.
+    """
+    import random
+
+    # 1. Toutes les fiches avec superficie non nulle
+    rows = (
+        db.query(Rehabilitation)
+        .filter(
+            Rehabilitation.superficie_rehabilitee.isnot(None),
+            Rehabilitation.superficie_rehabilitee > 0,
+        )
+        .all()
+    )
+
+    if not rows:
+        return {
+            "fiches": [],
+            "total_fiches": 0,
+            "superficie_echantillon": 0.0,
+            "superficie_totale": 0.0,
+            "pourcentage_couverture": 0.0,
+            "par_classe": [],
+        }
+
+    superficie_totale = sum(float(r.superficie_rehabilitee) for r in rows)
+    seuil_20 = superficie_totale * 0.20
+
+    # 2. Regrouper par (classe, brigade_name)
+    groupes: dict[tuple, list] = {}
+    for r in rows:
+        cls = _audit_class(float(r.superficie_rehabilitee))
+        brigade = r.brigade_name or "— Sans brigade —"
+        key = (cls, brigade)
+        groupes.setdefault(key, []).append(r)
+
+    # 3. Tirer 1 fiche aléatoire par groupe (classe × brigade)
+    selected_ids: set[int] = set()
+    selected: list = []
+
+    for fiches_groupe in groupes.values():
+        fiche = random.choice(fiches_groupe)
+        if fiche.id not in selected_ids:
+            selected_ids.add(fiche.id)
+            selected.append(fiche)
+
+    # 4. Compléter jusqu'à atteindre 20 % de la superficie totale
+    superficie_echantillon = sum(float(r.superficie_rehabilitee) for r in selected)
+
+    if superficie_echantillon < seuil_20:
+        # Fiches non encore sélectionnées, triées par superficie décroissante
+        remaining = sorted(
+            [r for r in rows if r.id not in selected_ids],
+            key=lambda r: float(r.superficie_rehabilitee),
+            reverse=True,
+        )
+        for fiche in remaining:
+            if superficie_echantillon >= seuil_20:
+                break
+            selected.append(fiche)
+            selected_ids.add(fiche.id)
+            superficie_echantillon += float(fiche.superficie_rehabilitee)
+
+    # 5. Construire la synthèse par classe
+    classe_map: dict[str, dict] = {}
+    for label, _, _ in AUDIT_CLASSES:
+        classe_map[label] = {"classe": label, "fiches": 0, "superficie": 0.0, "brigades": set()}
+
+    for r in selected:
+        cls = _audit_class(float(r.superficie_rehabilitee))
+        classe_map[cls]["fiches"] += 1
+        classe_map[cls]["superficie"] += float(r.superficie_rehabilitee)
+        if r.brigade_name:
+            classe_map[cls]["brigades"].add(r.brigade_name)
+
+    par_classe = [
+        {
+            "classe": v["classe"],
+            "fiches": v["fiches"],
+            "superficie": round(v["superficie"], 2),
+            "nb_brigades": len(v["brigades"]),
+        }
+        for v in classe_map.values()
+        if v["fiches"] > 0
+    ]
+
+    superficie_echantillon = round(sum(float(r.superficie_rehabilitee) for r in selected), 2)
+    pourcentage = round((superficie_echantillon / superficie_totale * 100) if superficie_totale else 0, 2)
+
+    return {
+        "fiches": selected,
+        "total_fiches": len(selected),
+        "superficie_echantillon": superficie_echantillon,
+        "superficie_totale": round(superficie_totale, 2),
+        "pourcentage_couverture": pourcentage,
+        "par_classe": par_classe,
+    }
+
+
 def get_departements(db: Session, q: Optional[str] = None) -> dict:
     """Liste des départements avec agrégats : fiches, superficie, communes, villages, brigades, années."""
     query = db.query(Rehabilitation).filter(

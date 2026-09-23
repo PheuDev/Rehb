@@ -127,6 +127,116 @@ def list_brigades(db: Session = Depends(get_db)):
 
 
 # ---------------------------------------------------------------------------
+# Audit superficies — échantillonnage aléatoire
+# ---------------------------------------------------------------------------
+@router.get("/audit-sample", response_model=schemas.AuditSampleResponse)
+def get_audit_sample(db: Session = Depends(get_db)):
+    """Génère un plan d'échantillonnage aléatoire pour l'audit des superficies."""
+    result = crud.get_audit_sample(db)
+
+    # Enrichir chaque fiche avec sa classe d'audit
+    fiches_out = []
+    for r in result["fiches"]:
+        sup = float(r.superficie_rehabilitee) if r.superficie_rehabilitee else None
+        fiche_data = schemas.AuditFicheOut.model_validate(r)
+        fiche_data.audit_classe = crud._audit_class(sup) if sup else None
+        fiches_out.append(fiche_data)
+
+    return {
+        "fiches": fiches_out,
+        "total_fiches": result["total_fiches"],
+        "superficie_echantillon": result["superficie_echantillon"],
+        "superficie_totale": result["superficie_totale"],
+        "pourcentage_couverture": result["pourcentage_couverture"],
+        "par_classe": result["par_classe"],
+    }
+
+
+@router.get("/audit-sample/export-excel")
+def export_audit_excel(db: Session = Depends(get_db)):
+    """Génère et télécharge le plan d'audit en Excel (2 feuilles)."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    result = crud.get_audit_sample(db)
+    fiches = result["fiches"]
+    par_classe = result["par_classe"]
+
+    HEADER_FILL = PatternFill(start_color="2D6846", end_color="2D6846", fill_type="solid")
+    HEADER_FONT = Font(color="FFFFFF", bold=True)
+
+    wb = Workbook()
+
+    # ── Feuille 1 : liste des fiches ──────────────────────────────────────
+    ws1 = wb.active
+    ws1.title = "Échantillon audit"
+    headers1 = [
+        "N°PDA", "Classe de superficie", "Département", "Commune",
+        "Arrondissement", "Village", "Brigade", "Producteur",
+        "Superficie (ha)", "Année",
+    ]
+    ws1.append(headers1)
+    for col_idx, _ in enumerate(headers1, start=1):
+        cell = ws1.cell(row=1, column=col_idx)
+        cell.fill = HEADER_FILL
+        cell.font = HEADER_FONT
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        ws1.column_dimensions[get_column_letter(col_idx)].width = 22
+    ws1.row_dimensions[1].height = 30
+    ws1.freeze_panes = "A2"
+
+    for r in fiches:
+        sup = float(r.superficie_rehabilitee) if r.superficie_rehabilitee else None
+        ws1.append([
+            r.pda_number,
+            crud._audit_class(sup) if sup else None,
+            r.departement,
+            r.commune,
+            r.arrondissement,
+            r.village,
+            r.brigade_name,
+            r.producer_name,
+            sup,
+            r.annee_rehabilitation,
+        ])
+
+    # ── Feuille 2 : synthèse par classe ───────────────────────────────────
+    ws2 = wb.create_sheet("Synthèse par classe")
+    headers2 = ["Classe de superficie", "Fiches sélectionnées", "Superficie (ha)", "Brigades couvertes"]
+    ws2.append(headers2)
+    for col_idx, _ in enumerate(headers2, start=1):
+        cell = ws2.cell(row=1, column=col_idx)
+        cell.fill = HEADER_FILL
+        cell.font = HEADER_FONT
+        cell.alignment = Alignment(horizontal="center")
+        ws2.column_dimensions[get_column_letter(col_idx)].width = 26
+    ws2.freeze_panes = "A2"
+
+    for cls in par_classe:
+        ws2.append([cls["classe"], cls["fiches"], cls["superficie"], cls["nb_brigades"]])
+
+    # Ligne totaux
+    total_row = len(par_classe) + 2
+    ws2.cell(row=total_row, column=1, value="TOTAL").font = Font(bold=True)
+    ws2.cell(row=total_row, column=2, value=result["total_fiches"]).font = Font(bold=True)
+    ws2.cell(row=total_row, column=3, value=result["superficie_echantillon"]).font = Font(bold=True)
+    ws2.cell(row=total_row + 1, column=1, value="Superficie totale système").font = Font(italic=True)
+    ws2.cell(row=total_row + 1, column=3, value=result["superficie_totale"]).font = Font(italic=True)
+    ws2.cell(row=total_row + 2, column=1, value="Couverture (%)").font = Font(italic=True)
+    ws2.cell(row=total_row + 2, column=3, value=f"{result['pourcentage_couverture']} %").font = Font(italic=True)
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return StreamingResponse(
+        buffer,
+        media_type=XLSX_MEDIA_TYPE,
+        headers={"Content-Disposition": "attachment; filename=plan_audit_superficies.xlsx"},
+    )
+
+
+# ---------------------------------------------------------------------------
 # Liste des départements
 # ---------------------------------------------------------------------------
 @router.get("/departements", response_model=schemas.DepartementListResponse)
