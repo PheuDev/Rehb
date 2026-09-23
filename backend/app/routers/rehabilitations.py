@@ -127,13 +127,23 @@ def list_brigades(db: Session = Depends(get_db)):
 
 
 # ---------------------------------------------------------------------------
+# Liste des producteurs (regroupés par nom)
+# ---------------------------------------------------------------------------
+@router.get("/producteurs", response_model=schemas.ProducerListResponse)
+def list_producers(
+    q: Optional[str] = Query(None, description="Recherche par nom, téléphone, commune ou village"),
+    db: Session = Depends(get_db),
+):
+    """Producteurs distincts avec leurs informations agrégées (fiches, superficie, communes…)."""
+    return crud.get_producers(db, q=q)
+
+
+# ---------------------------------------------------------------------------
 # Statistiques globales et agrégats
 # ---------------------------------------------------------------------------
 @router.get("/stats", response_model=schemas.StatsResponse)
 def get_stats(db: Session = Depends(get_db)):
     return crud.get_stats(db)
-
-
 # ---------------------------------------------------------------------------
 # Export CSV (respecte les filtres actifs)
 # ---------------------------------------------------------------------------

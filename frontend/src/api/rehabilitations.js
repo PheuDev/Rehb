@@ -94,3 +94,8 @@ export async function importExcel(file) {
   });
   return data;
 }
+
+export async function getProducers(params) {
+  const { data } = await client.get("/rehabilitations/producteurs", { params });
+  return data;
+}

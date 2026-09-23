@@ -173,6 +173,23 @@ class BrigadeOut(BaseModel):
     fiches: int = 0
 
 
+class ProducerOut(BaseModel):
+    """Producteur distinct (regroupé par nom), avec ses informations agrégées."""
+
+    producer_name: str
+    producer_phone: Optional[str] = None
+    fiches: int = 0
+    superficie_totale: float = 0.0
+    communes: List[str] = []
+    villages: List[str] = []
+    brigades: List[str] = []
+
+
+class ProducerListResponse(BaseModel):
+    items: List[ProducerOut]
+    total: int
+
+
 class ImportRowError(BaseModel):
     ligne: int
     erreurs: List[str]

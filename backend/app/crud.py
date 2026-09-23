@@ -269,6 +269,75 @@ def get_brigades(db: Session) -> list[dict]:
     return [{"name": name, "fiches": count} for name, count in rows]
 
 
+def get_producers(db: Session, q: Optional[str] = None) -> dict:
+    """Liste des producteurs distincts, regroupés par nom.
+
+    Chaque entrée contient le téléphone, le nombre de fiches, la superficie
+    totale, ainsi que les communes, villages et brigades associés.
+    Un filtre optionnel ``q`` permet une recherche par nom ou téléphone.
+    """
+    from sqlalchemy import String
+
+    query = (
+        db.query(Rehabilitation)
+        .filter(
+            Rehabilitation.producer_name.isnot(None),
+            Rehabilitation.producer_name != "",
+        )
+    )
+
+    if q:
+        like = f"%{q}%"
+        query = query.filter(
+            or_(
+                Rehabilitation.producer_name.ilike(like),
+                Rehabilitation.producer_phone.ilike(like),
+                Rehabilitation.commune.ilike(like),
+                Rehabilitation.village.ilike(like),
+            )
+        )
+
+    rows = query.order_by(func.lower(Rehabilitation.producer_name)).all()
+
+    # Regroupe par (producer_name, producer_phone)
+    producers: dict[tuple, dict] = {}
+    for r in rows:
+        key = (r.producer_name, r.producer_phone or "")
+        if key not in producers:
+            producers[key] = {
+                "producer_name": r.producer_name,
+                "producer_phone": r.producer_phone or None,
+                "fiches": 0,
+                "superficie_totale": 0.0,
+                "communes": set(),
+                "villages": set(),
+                "brigades": set(),
+            }
+        p = producers[key]
+        p["fiches"] += 1
+        if r.superficie_rehabilitee is not None:
+            p["superficie_totale"] += float(r.superficie_rehabilitee)
+        if r.commune:
+            p["communes"].add(r.commune)
+        if r.village:
+            p["villages"].add(r.village)
+        if r.brigade_name:
+            p["brigades"].add(r.brigade_name)
+
+    items = [
+        {
+            **{k: v for k, v in p.items() if k not in ("communes", "villages", "brigades")},
+            "superficie_totale": round(p["superficie_totale"], 2),
+            "communes": sorted(p["communes"]),
+            "villages": sorted(p["villages"]),
+            "brigades": sorted(p["brigades"]),
+        }
+        for p in producers.values()
+    ]
+
+    return {"items": items, "total": len(items)}
+
+
 def get_stats(db: Session):
     total_fiches = db.query(func.count(Rehabilitation.id)).scalar() or 0
     superficie_totale = float(
