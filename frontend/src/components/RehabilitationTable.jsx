@@ -1,7 +1,7 @@
 import { ArrowUp, ArrowDown, ArrowUpDown, Pencil, Trash2 } from "lucide-react";
 import { Spinner, EmptyState } from "./ui.jsx";
 import { formatNumber } from "../utils/format.js";
-import { SUP_CLASS_COLORS, OPERATIONS } from "../utils/constants.js";
+import { SUP_CLASS_COLORS, OPERATIONS, SORT_COLUMNS } from "../utils/constants.js";
 
 const COLUMNS = [
   { key: "selection", label: "Sélection" },
@@ -20,6 +20,39 @@ function SortIcon({ active, order }) {
   return order === "asc" ? <ArrowUp size={14} /> : <ArrowDown size={14} />;
 }
 
+// ─── Barre de tri rapide ──────────────────────────────────────────────────────
+function SortBar({ sortBy, sortOrder, onSort }) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2.5 shadow-sm">
+      <span className="mr-1 text-xs font-semibold uppercase tracking-wide text-gray-400">
+        Trier par
+      </span>
+      {Object.entries(SORT_COLUMNS).map(([key, label]) => {
+        const active = sortBy === key;
+        const isAsc = sortOrder === "asc";
+        return (
+          <button
+            key={key}
+            onClick={() => onSort(key)}
+            className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+              active
+                ? "bg-forest-600 text-white"
+                : "bg-gray-100 text-gray-600 hover:bg-forest-50 hover:text-forest-700"
+            }`}
+          >
+            {label}
+            {active
+              ? isAsc
+                ? <ArrowUp size={11} />
+                : <ArrowDown size={11} />
+              : <ArrowUpDown size={11} className="opacity-40" />}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function RehabilitationTable({
   items,
   loading,
@@ -34,7 +67,9 @@ export default function RehabilitationTable({
   allSelected = false,
 }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
+    <div className="space-y-2">
+      <SortBar sortBy={sortBy} sortOrder={sortOrder} onSort={onSort} />
+      <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
       <table className="min-w-full divide-y divide-gray-200 text-sm">
         <thead className="bg-gray-50">
           <tr>
@@ -153,6 +188,7 @@ export default function RehabilitationTable({
             ))}
         </tbody>
       </table>
+    </div>
     </div>
   );
 }
