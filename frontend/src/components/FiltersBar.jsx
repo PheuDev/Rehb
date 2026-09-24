@@ -1,5 +1,5 @@
 import { Search, RotateCcw, Download, FileSpreadsheet, UploadCloud, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
-import { Input, Select } from "./ui.jsx";
+import { Input, Select, BrigadeCombobox } from "./ui.jsx";
 import { SUP_CLASSES, SORT_COLUMNS } from "../utils/constants.js";
 
 export default function FiltersBar({
@@ -55,12 +55,12 @@ export default function FiltersBar({
           ))}
         </Select>
 
-        <Select value={filters.brigade ?? ""} onChange={handle("brigade")}>
-          <option value="">Toutes les brigades</option>
-          {filterOptions?.brigades?.map((b) => (
-            <option key={b} value={b}>{b}</option>
-          ))}
-        </Select>
+        <BrigadeCombobox
+          value={filters.brigade ?? ""}
+          onChange={(val) => onChange({ ...filters, brigade: val })}
+          options={filterOptions?.brigades ?? []}
+          placeholder="Toutes les brigades"
+        />
 
         <Select value={filters.annee} onChange={handle("annee")}>
           <option value="">Toutes les années</option>
