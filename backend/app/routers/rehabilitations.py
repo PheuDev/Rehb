@@ -130,6 +130,169 @@ def list_brigades_detail(
     return crud.get_brigades_detail(db, q=q)
 
 
+@router.get("/brigades-detail/export-excel")
+def export_brigades_excel(
+    q: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Exporte la liste des brigades (agrégée) au format Excel."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    data = crud.get_brigades_detail(db, q=q)
+    items = data["items"]
+
+    HEADER_FILL = PatternFill(start_color="2D6846", end_color="2D6846", fill_type="solid")
+    HEADER_FONT = Font(color="FFFFFF", bold=True)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Brigades"
+
+    headers = [
+        "Nom de la brigade", "Chef de brigade", "Téléphone",
+        "Nb fiches", "Superficie totale (ha)",
+        "Nb communes", "Nb villages", "Nb départements",
+        "Communes", "Départements", "Années actives",
+    ]
+    col_widths = [30, 28, 20, 12, 22, 14, 14, 18, 40, 40, 25]
+
+    ws.append(headers)
+    for idx, (_, width) in enumerate(zip(headers, col_widths), start=1):
+        cell = ws.cell(row=1, column=idx)
+        cell.fill = HEADER_FILL
+        cell.font = HEADER_FONT
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        ws.column_dimensions[get_column_letter(idx)].width = width
+    ws.row_dimensions[1].height = 30
+    ws.freeze_panes = "A2"
+
+    for b in items:
+        ws.append([
+            b["brigade_name"],
+            b["manager_name"] or "",
+            b["manager_phone"] or "",
+            b["fiches"],
+            b["superficie_totale"],
+            b["nb_communes"],
+            b["nb_villages"],
+            b["nb_departements"],
+            ", ".join(b["communes"]),
+            ", ".join(b["departements"]),
+            ", ".join(str(a) for a in b["annees"]),
+        ])
+
+    ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}{max(ws.max_row, 1)}"
+    return _workbook_response(wb, "brigades.xlsx")
+
+
+@router.get("/departements/export-excel")
+def export_departements_excel(
+    q: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Exporte la liste des départements (agrégée) au format Excel."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    data = crud.get_departements(db, q=q)
+    items = data["items"]
+
+    HEADER_FILL = PatternFill(start_color="B45309", end_color="B45309", fill_type="solid")
+    HEADER_FONT = Font(color="FFFFFF", bold=True)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Départements"
+
+    headers = [
+        "Département", "Nb fiches", "Superficie totale (ha)",
+        "Nb communes", "Nb arrondissements", "Nb villages",
+        "Communes", "Brigades", "Années actives",
+    ]
+    col_widths = [25, 12, 22, 14, 20, 14, 45, 45, 25]
+
+    ws.append(headers)
+    for idx, (_, width) in enumerate(zip(headers, col_widths), start=1):
+        cell = ws.cell(row=1, column=idx)
+        cell.fill = HEADER_FILL
+        cell.font = HEADER_FONT
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        ws.column_dimensions[get_column_letter(idx)].width = width
+    ws.row_dimensions[1].height = 30
+    ws.freeze_panes = "A2"
+
+    for d in items:
+        ws.append([
+            d["departement"],
+            d["fiches"],
+            d["superficie_totale"],
+            d["nb_communes"],
+            d["nb_arrondissements"],
+            d["nb_villages"],
+            ", ".join(d["communes"]),
+            ", ".join(d["brigades"]),
+            ", ".join(str(a) for a in d["annees"]),
+        ])
+
+    ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}{max(ws.max_row, 1)}"
+    return _workbook_response(wb, "departements.xlsx")
+
+
+@router.get("/producteurs/export-excel")
+def export_producteurs_excel(
+    q: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Exporte la liste des producteurs (agrégée) au format Excel."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    data = crud.get_producers(db, q=q)
+    items = data["items"]
+
+    HEADER_FILL = PatternFill(start_color="065F46", end_color="065F46", fill_type="solid")
+    HEADER_FONT = Font(color="FFFFFF", bold=True)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Producteurs"
+
+    headers = [
+        "Nom du producteur", "Téléphone",
+        "Nb fiches", "Superficie totale (ha)",
+        "Communes", "Villages", "Brigades",
+    ]
+    col_widths = [35, 20, 12, 22, 40, 40, 40]
+
+    ws.append(headers)
+    for idx, (_, width) in enumerate(zip(headers, col_widths), start=1):
+        cell = ws.cell(row=1, column=idx)
+        cell.fill = HEADER_FILL
+        cell.font = HEADER_FONT
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        ws.column_dimensions[get_column_letter(idx)].width = width
+    ws.row_dimensions[1].height = 30
+    ws.freeze_panes = "A2"
+
+    for p in items:
+        ws.append([
+            p["producer_name"],
+            p["producer_phone"] or "",
+            p["fiches"],
+            p["superficie_totale"],
+            ", ".join(p["communes"]),
+            ", ".join(p["villages"]),
+            ", ".join(p["brigades"]),
+        ])
+
+    ws.auto_filter.ref = f"A1:{get_column_letter(len(headers))}{max(ws.max_row, 1)}"
+    return _workbook_response(wb, "producteurs.xlsx")
+
+
 # ---------------------------------------------------------------------------
 # Audit superficies — échantillonnage aléatoire
 # ---------------------------------------------------------------------------

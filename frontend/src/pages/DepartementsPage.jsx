@@ -17,22 +17,9 @@ import {
 import AppHeader from "../components/AppHeader.jsx";
 import Sidebar from "../components/Sidebar.jsx";
 import { Spinner, EmptyState } from "../components/ui.jsx";
-import { getDepartements } from "../api/rehabilitations.js";
+import { getDepartements, exportDepartementsExcel } from "../api/rehabilitations.js";
 import { formatNumber } from "../utils/format.js";
 import { useDebounce } from "../hooks/useDebounce.js";
-import { downloadAsCsv } from "../utils/exportCsv.js";
-
-const DEPARTEMENT_EXPORT_COLUMNS = [
-  { header: "Département",            key: "departement" },
-  { header: "Nb fiches",              key: "fiches" },
-  { header: "Superficie totale (ha)", key: "superficie_totale" },
-  { header: "Nb communes",            key: "nb_communes" },
-  { header: "Nb arrondissements",     key: "nb_arrondissements" },
-  { header: "Nb villages",            key: "nb_villages" },
-  { header: "Communes",               key: "communes",  format: (v) => (v ?? []).join(", ") },
-  { header: "Brigades",               key: "brigades",  format: (v) => (v ?? []).join(", ") },
-  { header: "Années actives",         key: "annees",    format: (v) => (v ?? []).join(", ") },
-];
 
 const PAGE_SIZES = [10, 25, 50];
 
@@ -159,32 +146,32 @@ export default function DepartementsPage() {
 
         <main className="min-w-0 flex-1 space-y-6">
           {/* Breadcrumb */}
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <button onClick={() => navigate("/")} className="btn-secondary">
-              <ArrowLeft size={16} /> Retour aux fiches
-            </button>
-            <button
-              onClick={() => downloadAsCsv(sorted, DEPARTEMENT_EXPORT_COLUMNS, "departements")}
-              disabled={sorted.length === 0}
-              className="btn-secondary disabled:opacity-40"
-            >
-              <Download size={15} /> Exporter Excel
-            </button>
-          </div>
+          <button onClick={() => navigate("/")} className="btn-secondary">
+            <ArrowLeft size={16} /> Retour aux fiches
+          </button>
 
-          {/* Titre */}
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
-              <MapPin size={22} />
+          {/* Titre + bouton export */}
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
+                <MapPin size={22} />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Liste des départements</h2>
+                <p className="text-sm text-gray-500">
+                  {loading
+                    ? "Chargement…"
+                    : `${total} département${total !== 1 ? "s" : ""} enregistré${total !== 1 ? "s" : ""}`}
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900">Liste des départements</h2>
-              <p className="text-sm text-gray-500">
-                {loading
-                  ? "Chargement…"
-                  : `${total} département${total !== 1 ? "s" : ""} enregistré${total !== 1 ? "s" : ""}`}
-              </p>
-            </div>
+            <button
+              onClick={() => exportDepartementsExcel(debouncedQ ? { q: debouncedQ } : undefined)}
+              disabled={loading || departements.length === 0}
+              className="btn-primary disabled:opacity-40"
+            >
+              <Download size={15} /> Exporter en Excel
+            </button>
           </div>
 
           {/* KPI rapides */}

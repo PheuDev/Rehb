@@ -17,23 +17,9 @@ import {
 import AppHeader from "../components/AppHeader.jsx";
 import Sidebar from "../components/Sidebar.jsx";
 import { Spinner, EmptyState } from "../components/ui.jsx";
-import { getBrigadesDetail } from "../api/rehabilitations.js";
+import { getBrigadesDetail, exportBrigadesExcel } from "../api/rehabilitations.js";
 import { formatNumber } from "../utils/format.js";
 import { useDebounce } from "../hooks/useDebounce.js";
-import { downloadAsCsv } from "../utils/exportCsv.js";
-
-const BRIGADE_EXPORT_COLUMNS = [
-  { header: "Nom de la brigade",   key: "brigade_name" },
-  { header: "Chef de brigade",     key: "manager_name" },
-  { header: "Téléphone",           key: "manager_phone" },
-  { header: "Nb fiches",           key: "fiches" },
-  { header: "Superficie totale (ha)", key: "superficie_totale" },
-  { header: "Nb communes",         key: "nb_communes" },
-  { header: "Nb villages",         key: "nb_villages" },
-  { header: "Communes",            key: "communes",    format: (v) => (v ?? []).join(", ") },
-  { header: "Départements",        key: "departements", format: (v) => (v ?? []).join(", ") },
-  { header: "Années actives",      key: "annees",      format: (v) => (v ?? []).join(", ") },
-];
 
 const PAGE_SIZES = [10, 25, 50];
 
@@ -157,32 +143,32 @@ export default function BrigadesPage() {
         <main className="min-w-0 flex-1 space-y-6">
 
           {/* Breadcrumb */}
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <button onClick={() => navigate("/")} className="btn-secondary">
-              <ArrowLeft size={16} /> Retour aux fiches
-            </button>
-            <button
-              onClick={() => downloadAsCsv(sorted, BRIGADE_EXPORT_COLUMNS, "brigades")}
-              disabled={sorted.length === 0}
-              className="btn-secondary disabled:opacity-40"
-            >
-              <Download size={15} /> Exporter Excel
-            </button>
-          </div>
+          <button onClick={() => navigate("/")} className="btn-secondary">
+            <ArrowLeft size={16} /> Retour aux fiches
+          </button>
 
-          {/* Titre */}
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-forest-100 text-forest-700">
-              <Users size={22} />
+          {/* Titre + bouton export */}
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-forest-100 text-forest-700">
+                <Users size={22} />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Liste des brigades</h2>
+                <p className="text-sm text-gray-500">
+                  {loading
+                    ? "Chargement…"
+                    : `${total} brigade${total !== 1 ? "s" : ""} enregistrée${total !== 1 ? "s" : ""}`}
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900">Liste des brigades</h2>
-              <p className="text-sm text-gray-500">
-                {loading
-                  ? "Chargement…"
-                  : `${total} brigade${total !== 1 ? "s" : ""} enregistrée${total !== 1 ? "s" : ""}`}
-              </p>
-            </div>
+            <button
+              onClick={() => exportBrigadesExcel(debouncedQ ? { q: debouncedQ } : undefined)}
+              disabled={loading || brigades.length === 0}
+              className="btn-primary disabled:opacity-40"
+            >
+              <Download size={15} /> Exporter en Excel
+            </button>
           </div>
 
           {/* KPI rapides */}

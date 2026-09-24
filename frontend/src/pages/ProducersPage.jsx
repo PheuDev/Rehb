@@ -17,20 +17,9 @@ import {
 import AppHeader from "../components/AppHeader.jsx";
 import Sidebar from "../components/Sidebar.jsx";
 import { Spinner, EmptyState } from "../components/ui.jsx";
-import { getProducers } from "../api/rehabilitations.js";
+import { getProducers, exportProducteursExcel } from "../api/rehabilitations.js";
 import { formatNumber } from "../utils/format.js";
 import { useDebounce } from "../hooks/useDebounce.js";
-import { downloadAsCsv } from "../utils/exportCsv.js";
-
-const PRODUCER_EXPORT_COLUMNS = [
-  { header: "Nom du producteur",      key: "producer_name" },
-  { header: "Téléphone",              key: "producer_phone" },
-  { header: "Nb fiches",              key: "fiches" },
-  { header: "Superficie totale (ha)", key: "superficie_totale" },
-  { header: "Communes",               key: "communes",  format: (v) => (v ?? []).join(", ") },
-  { header: "Villages",               key: "villages",  format: (v) => (v ?? []).join(", ") },
-  { header: "Brigades",               key: "brigades",  format: (v) => (v ?? []).join(", ") },
-];
 
 const PAGE_SIZES = [10, 25, 50, 100];
 
@@ -157,32 +146,33 @@ export default function ProducersPage() {
 
         <main className="min-w-0 flex-1 space-y-6">
           {/* Breadcrumb */}
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <button onClick={() => navigate("/")} className="btn-secondary">
-              <ArrowLeft size={16} /> Retour aux fiches
-            </button>
-            <button
-              onClick={() => downloadAsCsv(sorted, PRODUCER_EXPORT_COLUMNS, "producteurs")}
-              disabled={sorted.length === 0}
-              className="btn-secondary disabled:opacity-40"
-            >
-              <Download size={15} /> Exporter Excel
-            </button>
-          </div>
+          {/* Breadcrumb */}
+          <button onClick={() => navigate("/")} className="btn-secondary">
+            <ArrowLeft size={16} /> Retour aux fiches
+          </button>
 
-          {/* Titre */}
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
-              <Leaf size={22} />
+          {/* Titre + bouton export */}
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+                <Leaf size={22} />
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Liste des producteurs</h2>
+                <p className="text-sm text-gray-500">
+                  {loading
+                    ? "Chargement…"
+                    : `${total} producteur${total !== 1 ? "s" : ""} enregistré${total !== 1 ? "s" : ""}`}
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900">Liste des producteurs</h2>
-              <p className="text-sm text-gray-500">
-                {loading
-                  ? "Chargement…"
-                  : `${total} producteur${total !== 1 ? "s" : ""} enregistré${total !== 1 ? "s" : ""}`}
-              </p>
-            </div>
+            <button
+              onClick={() => exportProducteursExcel(debouncedQ ? { q: debouncedQ } : undefined)}
+              disabled={loading || producers.length === 0}
+              className="btn-primary disabled:opacity-40"
+            >
+              <Download size={15} /> Exporter en Excel
+            </button>
           </div>
 
           {/* KPI rapides */}

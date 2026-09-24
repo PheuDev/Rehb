@@ -121,3 +121,18 @@ export async function getBrigadesDetail(params) {
   const { data } = await client.get("/rehabilitations/brigades-detail", { params });
   return data;
 }
+
+export async function exportBrigadesExcel(params) {
+  const response = await client.get("/rehabilitations/brigades-detail/export-excel", { params, responseType: "blob" });
+  downloadBlob(response.data, "brigades.xlsx");
+}
+
+export async function exportDepartementsExcel(params) {
+  const response = await client.get("/rehabilitations/departements/export-excel", { params, responseType: "blob" });
+  downloadBlob(response.data, "departements.xlsx");
+}
+
+export async function exportProducteursExcel(params) {
+  const response = await client.get("/rehabilitations/producteurs/export-excel", { params, responseType: "blob" });
+  downloadBlob(response.data, "producteurs.xlsx");
+}
