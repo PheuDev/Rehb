@@ -1,4 +1,4 @@
-import csv
+﻿import csv
 import io
 from typing import Optional
 
@@ -414,8 +414,8 @@ def export_audit_excel(db: Session = Depends(get_db)):
 
     # ── Feuille C : synthese par brigade ─────────────────────────────────
     ws_c = wb.create_sheet("C - Synthese par brigade")
-    headers_c = ["Brigade", "Total fiches", "Fiches echantillon", "Superficie brigade (ha)",
-                 "Superficie echantillon (ha)", "Couverture (%)"]
+    headers_c = ["Brigade", "Total fiches", "Fiches echantillon", "Couverture fiches (%)",
+                 "Superficie brigade (ha)", "Superficie echantillon (ha)", "Couverture superficie (%)"]
     ws_c.append(headers_c)
     for i, _ in enumerate(headers_c, 1):
         c = ws_c.cell(row=1, column=i)
@@ -425,7 +425,9 @@ def export_audit_excel(db: Session = Depends(get_db)):
     ws_c.freeze_panes = "A2"
     for b in result["par_brigade"]:
         ws_c.append([b["brigade"], b["total_fiches"], b["fiches_echantillon"],
-                     b["superficie_brigade"], b["superficie_echantillon"], f"{b['pourcentage']} %"])
+                     f"{b['pourcentage_fiches']} %",
+                     b["superficie_brigade"], b["superficie_echantillon"],
+                     f"{b['pourcentage_superficie']} %"])
 
     buffer = io.BytesIO()
     wb.save(buffer)

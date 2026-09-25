@@ -1,4 +1,4 @@
-from decimal import Decimal
+﻿from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy import or_, func, asc, desc
@@ -391,6 +391,7 @@ def get_audit_sample(db: Session) -> dict:
     - Toutes les classes présentes sont représentées.
     """
     import random
+    import math
 
     rows = (
         db.query(Rehabilitation)
@@ -425,19 +426,19 @@ def get_audit_sample(db: Session) -> dict:
     selected_ids: set[int] = set()
     selected: list = []
 
-    # Pour chaque brigade : selectionner au moins 20% de sa superficie
+    # Pour chaque brigade : selectionner au moins 20% du NOMBRE de fiches de la brigade
     for brigade, fiches_brigade in par_brigade_fiches.items():
-        sup_brigade = sum(float(r.superficie_rehabilitee) for r in fiches_brigade)
-        seuil_brigade = sup_brigade * 0.20
+        nb_brigade = len(fiches_brigade)
+        seuil_brigade = max(1, math.ceil(nb_brigade * 0.20))
         shuffled = fiches_brigade.copy()
         random.shuffle(shuffled)
-        sup_brigade_sel = 0.0
+        nb_sel = 0
         for fiche in shuffled:
             if fiche.id not in selected_ids:
                 selected_ids.add(fiche.id)
                 selected.append(fiche)
-                sup_brigade_sel += float(fiche.superficie_rehabilitee)
-                if sup_brigade_sel >= seuil_brigade:
+                nb_sel += 1
+                if nb_sel >= seuil_brigade:
                     break
 
     # Completer si le global n'atteint pas 25%
@@ -479,13 +480,16 @@ def get_audit_sample(db: Session) -> dict:
         sup_b = sum(float(r.superficie_rehabilitee) for r in fiches_brigade)
         sel_b = [r for r in fiches_brigade if r.id in selected_ids]
         sup_sel_b = sum(float(r.superficie_rehabilitee) for r in sel_b)
+        nb_total = len(fiches_brigade)
+        nb_sel_b = len(sel_b)
         par_brigade_synth.append({
             "brigade": brigade,
-            "total_fiches": len(fiches_brigade),
-            "fiches_echantillon": len(sel_b),
+            "total_fiches": nb_total,
+            "fiches_echantillon": nb_sel_b,
+            "pourcentage_fiches": round((nb_sel_b / nb_total * 100) if nb_total else 0, 1),
             "superficie_brigade": round(sup_b, 2),
             "superficie_echantillon": round(sup_sel_b, 2),
-            "pourcentage": round((sup_sel_b / sup_b * 100) if sup_b else 0, 1),
+            "pourcentage_superficie": round((sup_sel_b / sup_b * 100) if sup_b else 0, 1),
         })
     par_brigade_synth.sort(key=lambda x: x["brigade"])
 
