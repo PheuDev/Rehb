@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+﻿import { useState, useMemo } from "react";
 import {
   ArrowLeft, BarChart3, ChevronDown, ChevronUp, ChevronsUpDown,
   ClipboardCheck, Download, RefreshCw, Search, TreeDeciduous, Users, Percent, X,
@@ -11,52 +11,60 @@ import { Spinner } from "../components/ui.jsx";
 import { getAuditSample, exportAuditExcel } from "../api/rehabilitations.js";
 import { formatNumber } from "../utils/format.js";
 
+// ─── Tri ──────────────────────────────────────────────────────────────────────
 function Th({ label, field, sortKey, sortDir, onSort, className = "" }) {
   const active = sortKey === field;
   const Icon = active ? (sortDir === "asc" ? ChevronUp : ChevronDown) : ChevronsUpDown;
   return (
-    <th onClick={() => onSort(field)} className={`cursor-pointer select-none whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 hover:text-gray-800 ${className}`}>
-      <span className="inline-flex items-center gap-1">{label}<Icon size={12} className={active ? "text-violet-600" : "text-gray-400"} /></span>
+    <th
+      onClick={() => onSort(field)}
+      className={`cursor-pointer select-none whitespace-nowrap px-3 py-2.5 text-left text-xs font-medium text-gray-400 hover:text-gray-700 ${className}`}
+    >
+      <span className="inline-flex items-center gap-1">
+        {label}
+        <Icon size={11} className={active ? "text-violet-500" : "opacity-40"} />
+      </span>
     </th>
   );
 }
 
-function KpiCard({ icon: Icon, label, value, accent }) {
+// ─── Badge classe ─────────────────────────────────────────────────────────────
+const CLASS_COLORS = {
+  "S < 1 ha":        "bg-sky-50 text-sky-600 border border-sky-200",
+  "1 ≤ S < 2 ha":   "bg-emerald-50 text-emerald-600 border border-emerald-200",
+  "2 ≤ S < 3 ha":   "bg-teal-50 text-teal-600 border border-teal-200",
+  "3 ≤ S < 5 ha":   "bg-forest-50 text-forest-600 border border-forest-200",
+  "5 ≤ S < 10 ha":  "bg-amber-50 text-amber-600 border border-amber-200",
+  "10 ≤ S < 20 ha": "bg-orange-50 text-orange-600 border border-orange-200",
+  "20 ≤ S ≤ 30 ha": "bg-red-50 text-red-600 border border-red-200",
+  "S > 30 ha":       "bg-violet-50 text-violet-600 border border-violet-200",
+};
+function ClassBadge({ classe }) {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm flex items-center gap-3">
-      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${accent}`}><Icon size={20} /></div>
-      <div><p className="text-xs text-gray-500">{label}</p><p className="text-xl font-bold text-gray-900 leading-tight">{value}</p></div>
-    </div>
+    <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-medium ${CLASS_COLORS[classe] ?? "bg-gray-100 text-gray-500"}`}>
+      {classe}
+    </span>
   );
 }
 
-const CLASS_COLORS = {
-  "S < 1 ha": "bg-sky-100 text-sky-700", "1 ≤ S < 2 ha": "bg-emerald-100 text-emerald-700",
-  "2 ≤ S < 3 ha": "bg-teal-100 text-teal-700", "3 ≤ S < 5 ha": "bg-forest-100 text-forest-700",
-  "5 ≤ S < 10 ha": "bg-amber-100 text-amber-700", "10 ≤ S < 20 ha": "bg-orange-100 text-orange-700",
-  "20 ≤ S ≤ 30 ha": "bg-red-100 text-red-700", "S > 30 ha": "bg-violet-100 text-violet-700",
-};
-function ClassBadge({ classe }) {
-  return <span className={`badge text-xs ${CLASS_COLORS[classe] ?? "bg-gray-100 text-gray-600"}`}>{classe}</span>;
-}
+const CLASS_ORDER = [
+  "S < 1 ha","1 ≤ S < 2 ha","2 ≤ S < 3 ha","3 ≤ S < 5 ha",
+  "5 ≤ S < 10 ha","10 ≤ S < 20 ha","20 ≤ S ≤ 30 ha","S > 30 ha",
+];
 
-const CLASS_ORDER = ["S < 1 ha","1 ≤ S < 2 ha","2 ≤ S < 3 ha","3 ≤ S < 5 ha","5 ≤ S < 10 ha","10 ≤ S < 20 ha","20 ≤ S ≤ 30 ha","S > 30 ha"];
-
+// ─── Page ─────────────────────────────────────────────────────────────────────
 export default function AuditSuperficiePage() {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [result, setResult] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [exporting, setExporting] = useState(false);
-  const [error, setError] = useState(null);
+  const [result, setResult]           = useState(null);
+  const [loading, setLoading]         = useState(false);
+  const [exporting, setExporting]     = useState(false);
+  const [error, setError]             = useState(null);
 
-  // Filtre brigade
-  const [brigadeSearch, setBrigadeSearch] = useState("");
+  const [brigadeSearch, setBrigadeSearch]       = useState("");
   const [selectedBrigades, setSelectedBrigades] = useState([]);
-
-  // Tri
-  const [sortKey, setSortKey] = useState("brigade_name");
-  const [sortDir, setSortDir] = useState("asc");
+  const [sortKey, setSortKey]                   = useState("brigade_name");
+  const [sortDir, setSortDir]                   = useState("asc");
 
   async function handleGenerate() {
     setLoading(true); setError(null);
@@ -65,15 +73,14 @@ export default function AuditSuperficiePage() {
       setResult(data);
       setSelectedBrigades([]);
     } catch {
-      setError("Erreur lors de la génération de l'échantillon. Vérifiez que des fiches avec superficie sont présentes.");
+      setError("Impossible de générer l'échantillon. Vérifiez que des fiches avec superficie existent.");
     } finally { setLoading(false); }
   }
 
   async function handleExport() {
     setExporting(true);
-    try {
-      await exportAuditExcel(selectedBrigades.length > 0 ? selectedBrigades : null);
-    } catch {} finally { setExporting(false); }
+    try { await exportAuditExcel(selectedBrigades.length > 0 ? selectedBrigades : null); }
+    catch {} finally { setExporting(false); }
   }
 
   function handleSort(field) {
@@ -83,8 +90,7 @@ export default function AuditSuperficiePage() {
 
   const allBrigades = useMemo(() => {
     if (!result) return [];
-    const s = new Set(result.fiches.map((f) => f.brigade_name).filter(Boolean));
-    return Array.from(s).sort((a, b) => a.localeCompare(b, "fr"));
+    return [...new Set(result.fiches.map((f) => f.brigade_name).filter(Boolean))].sort((a, b) => a.localeCompare(b, "fr"));
   }, [result]);
 
   const filteredBrigadesList = useMemo(() => {
@@ -101,10 +107,7 @@ export default function AuditSuperficiePage() {
 
   const filteredFiches = useMemo(() => {
     if (!result) return [];
-    return result.fiches.filter((f) => {
-      const b = f.brigade_name ?? "— Sans brigade —";
-      return activeBrigades.includes(b) || activeBrigades.includes(f.brigade_name);
-    });
+    return result.fiches.filter((f) => activeBrigades.includes(f.brigade_name ?? "— Sans brigade —") || activeBrigades.includes(f.brigade_name));
   }, [result, activeBrigades]);
 
   const sortedFiches = useMemo(() => {
@@ -128,129 +131,157 @@ export default function AuditSuperficiePage() {
   }, [filteredFiches]);
 
   const supEch = filteredFiches.reduce((s, f) => s + (f.superficie_rehabilitee ?? 0), 0);
-  const pctEch = result && result.superficie_totale > 0 ? Math.round(supEch / result.superficie_totale * 1000) / 10 : 0;
+  const pctEch = result?.superficie_totale > 0 ? Math.round(supEch / result.superficie_totale * 1000) / 10 : 0;
 
   return (
     <div className="min-h-screen bg-gray-50 pb-16">
       <AppHeader sidebarOpen={sidebarOpen} onToggleSidebar={() => setSidebarOpen((v) => !v)} />
+
       <div className="mx-auto flex max-w-7xl items-start gap-6 px-4 py-6 sm:px-6">
         {sidebarOpen && <Sidebar onClose={() => setSidebarOpen(false)} />}
 
-        <main className="min-w-0 flex-1 space-y-6">
-          <button onClick={() => navigate("/")} className="btn-secondary"><ArrowLeft size={16} /> Retour aux fiches</button>
+        <main className="min-w-0 flex-1 space-y-5">
 
-          {/* Titre + actions */}
-          <div className="flex flex-wrap items-center justify-between gap-4">
+          {/* Breadcrumb + titre + actions — tout sur une ligne */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-100 text-violet-700"><ClipboardCheck size={22} /></div>
-              <div>
-                <h2 className="text-xl font-semibold text-gray-900">Superficie à Auditer</h2>
-                <p className="text-sm text-gray-500">25% superficie globale · 20% fiches par brigade · aléatoire</p>
+              <button onClick={() => navigate("/")} className="text-gray-400 hover:text-gray-700 transition-colors" title="Retour">
+                <ArrowLeft size={18} />
+              </button>
+              <div className="flex items-center gap-2">
+                <ClipboardCheck size={18} className="text-violet-500" />
+                <h2 className="text-lg font-semibold text-gray-900">Superficie à Auditer</h2>
+                <span className="hidden sm:inline text-xs text-gray-400">— 25% global · 20% fiches/brigade</span>
               </div>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              {!result && !loading && (
+                <button onClick={handleGenerate} className="btn-primary">
+                  <ClipboardCheck size={15} /> Générer l'échantillon
+                </button>
+              )}
               {result && (
                 <>
-                  <button onClick={handleGenerate} disabled={loading} className="btn-secondary">
-                    <RefreshCw size={15} className={loading ? "animate-spin" : ""} /> Regénérer
+                  <button onClick={handleGenerate} disabled={loading} className="btn-secondary text-xs px-3 py-1.5">
+                    <RefreshCw size={13} className={loading ? "animate-spin" : ""} /> Regénérer
                   </button>
-                  <button onClick={handleExport} disabled={exporting} className="btn-primary">
-                    {exporting ? <Spinner size={15} /> : <Download size={15} />}
-                    Exporter Excel{hasFilter ? ` (${selectedBrigades.length} brigade${selectedBrigades.length > 1 ? "s" : ""})` : ""}
+                  <button onClick={handleExport} disabled={exporting} className="btn-primary text-xs px-3 py-1.5">
+                    {exporting ? <Spinner size={13} /> : <Download size={13} />}
+                    Excel{hasFilter ? ` (${selectedBrigades.length})` : ""}
                   </button>
                 </>
               )}
             </div>
           </div>
 
-          {/* État initial */}
-          {!result && !loading && !error && (
-            <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-violet-200 bg-white py-24 gap-5">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-violet-100 text-violet-600"><ClipboardCheck size={32} /></div>
-              <div className="text-center">
-                <p className="text-lg font-semibold text-gray-800">Aucun échantillon généré</p>
-                <p className="mt-1 text-sm text-gray-500 max-w-sm">Générez un plan d'audit aléatoire : 20% des fiches par brigade, 25% de la superficie totale.</p>
-              </div>
-              <button onClick={handleGenerate} className="btn-primary px-8 py-3 text-base"><ClipboardCheck size={18} /> Générer l'échantillon</button>
-            </div>
+          {/* Erreur */}
+          {error && !loading && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>
           )}
 
-          {loading && <div className="flex items-center justify-center py-32"><Spinner size={36} /></div>}
+          {/* Chargement */}
+          {loading && <div className="flex items-center justify-center py-32"><Spinner size={32} /></div>}
 
-          {error && !loading && (
-            <div className="rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">{error}</div>
+          {/* État vide */}
+          {!result && !loading && !error && (
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-violet-200 bg-white py-20 gap-4 text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-violet-50 text-violet-400">
+                <ClipboardCheck size={28} />
+              </div>
+              <div>
+                <p className="font-medium text-gray-700">Aucun échantillon généré</p>
+                <p className="mt-0.5 text-sm text-gray-400 max-w-xs">Cliquez sur "Générer l'échantillon" pour lancer le tirage aléatoire.</p>
+              </div>
+            </div>
           )}
 
           {result && !loading && (
             <>
-              {/* KPI */}
-              <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-                <KpiCard icon={ClipboardCheck} label={hasFilter ? "Fiches (filtrées)" : "Fiches sélectionnées"} value={formatNumber(sortedFiches.length, 0)} accent="bg-violet-100 text-violet-700" />
-                <KpiCard icon={TreeDeciduous} label="Superficie échantillon (ha)" value={formatNumber(supEch)} accent="bg-forest-100 text-forest-700" />
-                <KpiCard icon={Percent} label="Couverture superficie" value={`${pctEch} %`} accent={pctEch >= 25 ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"} />
-                <KpiCard icon={BarChart3} label="Classes couvertes" value={`${syntheseFiltered.length} / 8`} accent="bg-sky-100 text-sky-700" />
+              {/* ── Ligne 1 : KPI compactes ── */}
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {[
+                  { icon: ClipboardCheck, label: hasFilter ? "Fiches (filtrées)" : "Fiches sélectionnées", value: formatNumber(sortedFiches.length, 0), accent: "text-violet-500" },
+                  { icon: TreeDeciduous,  label: "Superficie (ha)",   value: formatNumber(supEch),        accent: "text-forest-600" },
+                  { icon: Percent,        label: "Couverture",         value: `${pctEch} %`,               accent: pctEch >= 25 ? "text-emerald-600" : "text-amber-500" },
+                  { icon: BarChart3,      label: "Classes",            value: `${syntheseFiltered.length} / 8`, accent: "text-sky-500" },
+                ].map(({ icon: Icon, label, value, accent }) => (
+                  <div key={label} className="rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm flex items-center gap-3">
+                    <Icon size={18} className={`shrink-0 ${accent}`} />
+                    <div className="min-w-0">
+                      <p className="text-xs text-gray-400 truncate">{label}</p>
+                      <p className="text-lg font-bold text-gray-900 leading-tight">{value}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
 
-              {/* Filtre brigades */}
-              <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-4 space-y-3">
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <div className="flex items-center gap-2">
-                    <Users size={16} className="text-forest-600" />
-                    <p className="text-sm font-semibold text-gray-700">
-                      Filtrer par brigade
-                      {hasFilter && <span className="ml-2 badge bg-violet-100 text-violet-700">{selectedBrigades.length} sélectionnée{selectedBrigades.length > 1 ? "s" : ""}</span>}
+              {/* ── Ligne 2 : Filtre brigade (gauche) + Synthèse par classe (droite) ── */}
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
+
+                {/* Filtre brigade — plus compact */}
+                <div className="lg:col-span-2 rounded-xl border border-gray-200 bg-white shadow-sm p-3 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                      Brigades
+                      {hasFilter && <span className="ml-1.5 badge bg-violet-100 text-violet-600 normal-case font-normal">{selectedBrigades.length}</span>}
                     </p>
+                    <div className="flex gap-2 text-xs text-gray-400">
+                      <button onClick={() => setSelectedBrigades([])} className="hover:text-forest-600 transition-colors">Toutes</button>
+                      <span>·</span>
+                      <button onClick={() => setSelectedBrigades([...allBrigades])} className="hover:text-gray-700 transition-colors">Aucune</button>
+                    </div>
                   </div>
-                  <div className="flex gap-2 text-xs">
-                    <button onClick={() => setSelectedBrigades([])} className="text-forest-600 hover:underline">Toutes</button>
-                    <span className="text-gray-300">|</span>
-                    <button onClick={() => setSelectedBrigades([...allBrigades])} className="text-gray-500 hover:underline">Aucune</button>
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-300" size={13} />
+                    <input
+                      className="input pl-8 text-xs py-1.5"
+                      placeholder="Rechercher…"
+                      value={brigadeSearch}
+                      onChange={(e) => setBrigadeSearch(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-1 max-h-36 overflow-y-auto">
+                    {filteredBrigadesList.map((name) => {
+                      const active = selectedBrigades.length === 0 || selectedBrigades.includes(name);
+                      return (
+                        <button
+                          key={name}
+                          onClick={() => toggleBrigade(name)}
+                          className={`inline-flex items-center gap-0.5 rounded-md px-2 py-0.5 text-xs border transition-colors ${
+                            active
+                              ? "bg-forest-600 text-white border-forest-600"
+                              : "bg-white text-gray-400 border-gray-200 hover:border-gray-400"
+                          }`}
+                        >
+                          {name}
+                          {active && selectedBrigades.length > 0 && <X size={9} className="ml-0.5" />}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
-                  <input className="input pl-9 text-sm" placeholder="Rechercher une brigade…" value={brigadeSearch} onChange={(e) => setBrigadeSearch(e.target.value)} />
-                </div>
-                <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
-                  {filteredBrigadesList.map((name) => {
-                    const active = selectedBrigades.length === 0 || selectedBrigades.includes(name);
-                    return (
-                      <button key={name} onClick={() => toggleBrigade(name)}
-                        className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium border transition-colors ${
-                          active ? "bg-forest-600 text-white border-forest-600" : "bg-white text-gray-500 border-gray-200 hover:border-forest-400"
-                        }`}
-                      >
-                        {name}
-                        {active && selectedBrigades.length > 0 && <X size={10} />}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
 
-              {/* Synthèse par classe */}
-              <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-                <div className="border-b border-gray-100 px-5 py-3 flex items-center gap-2">
-                  <BarChart3 size={16} className="text-violet-600" />
-                  <p className="text-sm font-semibold text-gray-700">Synthèse par classe{hasFilter ? " — brigades filtrées" : ""}</p>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50 border-b border-gray-200">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Classe</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-500">Fiches</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-500">Superficie (ha)</th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-500">Brigades</th>
+                {/* Synthèse par classe */}
+                <div className="lg:col-span-3 rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                  <p className="px-4 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wide border-b border-gray-100">
+                    Synthèse par classe{hasFilter ? " — filtrées" : ""}
+                  </p>
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-gray-50 border-b border-gray-100">
+                        <th className="px-4 py-2 text-left font-medium text-gray-400">Classe</th>
+                        <th className="px-3 py-2 text-center font-medium text-gray-400">Fiches</th>
+                        <th className="px-3 py-2 text-center font-medium text-gray-400">Superficie</th>
+                        <th className="px-3 py-2 text-center font-medium text-gray-400">Brigades</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100">
+                    <tbody className="divide-y divide-gray-50">
                       {syntheseFiltered.map((cls) => (
-                        <tr key={cls.classe} className="hover:bg-gray-50">
-                          <td className="px-4 py-3"><ClassBadge classe={cls.classe} /></td>
-                          <td className="px-4 py-3 text-center font-medium">{cls.fiches}</td>
-                          <td className="px-4 py-3 text-center text-gray-700">{formatNumber(cls.superficie)} ha</td>
-                          <td className="px-4 py-3 text-center"><span className="badge bg-forest-100 text-forest-700"><Users size={11} className="mr-1 inline" />{cls.nb_brigades}</span></td>
+                        <tr key={cls.classe} className="hover:bg-gray-50/60">
+                          <td className="px-4 py-2"><ClassBadge classe={cls.classe} /></td>
+                          <td className="px-3 py-2 text-center font-medium text-gray-700">{cls.fiches}</td>
+                          <td className="px-3 py-2 text-center text-gray-500">{formatNumber(cls.superficie)} ha</td>
+                          <td className="px-3 py-2 text-center text-gray-500">{cls.nb_brigades}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -258,41 +289,42 @@ export default function AuditSuperficiePage() {
                 </div>
               </div>
 
-              {/* Tableau des fiches */}
+              {/* ── Tableau des fiches ── */}
               <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-                <div className="border-b border-gray-100 px-5 py-3 flex items-center gap-2">
-                  <ClipboardCheck size={16} className="text-violet-600" />
-                  <p className="text-sm font-semibold text-gray-700">
+                <div className="px-4 py-2.5 border-b border-gray-100 flex items-center gap-2">
+                  <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
                     Fiches à inspecter
-                    <span className="ml-2 badge bg-violet-100 text-violet-700">{sortedFiches.length}</span>
-                    {hasFilter && <span className="ml-1 text-xs text-gray-400">/ {result.total_fiches} total</span>}
                   </p>
+                  <span className="badge bg-violet-100 text-violet-600 text-xs">{sortedFiches.length}</span>
+                  {hasFilter && <span className="text-xs text-gray-400">/ {result.total_fiches} total</span>}
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead className="bg-gray-50 border-b border-gray-200">
+                    <thead className="bg-gray-50 border-b border-gray-100">
                       <tr>
-                        <Th label="Brigade" field="brigade_name" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-                        <Th label="Classe" field="audit_classe" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-                        <Th label="N° PDA" field="pda_number" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-                        <Th label="Département" field="departement" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-                        <Th label="Commune" field="commune" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-                        <Th label="Village" field="village" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-                        <Th label="Superficie (ha)" field="superficie_rehabilitee" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-                        <Th label="Année" field="annee_rehabilitation" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                        <Th label="Brigade"       field="brigade_name"         sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                        <Th label="Classe"         field="audit_classe"          sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                        <Th label="N° PDA"         field="pda_number"            sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                        <Th label="Département"    field="departement"           sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                        <Th label="Commune"        field="commune"               sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                        <Th label="Village"        field="village"               sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                        <Th label="Superficie"     field="superficie_rehabilitee" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+                        <Th label="Année"          field="annee_rehabilitation"  sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {sortedFiches.map((f) => (
-                        <tr key={f.id} className="hover:bg-violet-50 transition-colors">
-                          <td className="px-4 py-3 font-medium text-gray-900">{f.brigade_name ?? <span className="text-gray-400">—</span>}</td>
-                          <td className="px-4 py-3"><ClassBadge classe={f.audit_classe ?? "—"} /></td>
-                          <td className="px-4 py-3 text-gray-700">{f.pda_number ?? "—"}</td>
-                          <td className="px-4 py-3 text-gray-600">{f.departement ?? "—"}</td>
-                          <td className="px-4 py-3 text-gray-600">{f.commune ?? "—"}</td>
-                          <td className="px-4 py-3 text-gray-600">{f.village ?? "—"}</td>
-                          <td className="px-4 py-3 font-medium text-gray-900">{f.superficie_rehabilitee != null ? `${formatNumber(f.superficie_rehabilitee)} ha` : "—"}</td>
-                          <td className="px-4 py-3 text-gray-600">{f.annee_rehabilitation ?? "—"}</td>
+                        <tr key={f.id} className="hover:bg-violet-50/40 transition-colors">
+                          <td className="px-3 py-2.5 font-medium text-gray-800 text-sm">{f.brigade_name ?? <span className="text-gray-300">—</span>}</td>
+                          <td className="px-3 py-2.5"><ClassBadge classe={f.audit_classe ?? "—"} /></td>
+                          <td className="px-3 py-2.5 text-gray-600 text-sm">{f.pda_number ?? "—"}</td>
+                          <td className="px-3 py-2.5 text-gray-500 text-sm">{f.departement ?? "—"}</td>
+                          <td className="px-3 py-2.5 text-gray-500 text-sm">{f.commune ?? "—"}</td>
+                          <td className="px-3 py-2.5 text-gray-500 text-sm">{f.village ?? "—"}</td>
+                          <td className="px-3 py-2.5 font-medium text-gray-700 text-sm">
+                            {f.superficie_rehabilitee != null ? `${formatNumber(f.superficie_rehabilitee)} ha` : "—"}
+                          </td>
+                          <td className="px-3 py-2.5 text-gray-400 text-sm">{f.annee_rehabilitation ?? "—"}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -300,8 +332,8 @@ export default function AuditSuperficiePage() {
                 </div>
               </div>
 
-              <p className="text-xs text-gray-400">
-                Échantillonnage : ≥ 20% des fiches de chaque brigade, complété jusqu'à 25% de la superficie totale ({formatNumber(result.superficie_totale)} ha). Regénérer produit un tirage différent.
+              <p className="text-xs text-gray-300 text-right">
+                Superficie totale système : {formatNumber(result.superficie_totale)} ha · Regénérer produit un tirage différent.
               </p>
             </>
           )}
