@@ -110,8 +110,10 @@ export async function getAuditSample() {
   return data;
 }
 
-export async function exportAuditExcel() {
+export async function exportAuditExcel(brigades = null) {
+  const params = brigades && brigades.length > 0 ? { brigades: brigades.join(",") } : {};
   const response = await client.get("/rehabilitations/audit-sample/export-excel", {
+    params,
     responseType: "blob",
   });
   downloadBlob(response.data, "plan_audit_superficies.xlsx");

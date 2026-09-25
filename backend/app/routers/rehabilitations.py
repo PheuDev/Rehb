@@ -1,4 +1,4 @@
-﻿import csv
+import csv
 import io
 from typing import Optional
 
@@ -331,13 +331,24 @@ def get_audit_sample(db: Session = Depends(get_db)):
 
 
 @router.get("/audit-sample/export-excel")
-def export_audit_excel(db: Session = Depends(get_db)):
+def export_audit_excel(
+    brigades: Optional[str] = Query(None, description="Noms de brigades séparés par virgule"),
+    db: Session = Depends(get_db),
+):
     """Exporte le plan d'audit en Excel : Feuille A (echantillon) + Feuille B (hors echantillon)."""
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Font, PatternFill, Side, Border
     from openpyxl.utils import get_column_letter
 
     result = crud.get_audit_sample(db)
+
+    # Filtrer par brigades sélectionnées si demandé
+    brigade_filter = [b.strip() for b in brigades.split(",")] if brigades else None
+    if brigade_filter:
+        result = dict(result)
+        result["fiches"] = [r for r in result["fiches"] if (r.brigade_name or "— Sans brigade —") in brigade_filter]
+        result["fiches_hors_echantillon"] = [r for r in result["fiches_hors_echantillon"] if (r.brigade_name or "— Sans brigade —") in brigade_filter]
+        result["par_brigade"] = [b for b in result["par_brigade"] if b["brigade"] in brigade_filter]
 
     HEADER_FILL = PatternFill(start_color="2D6846", end_color="2D6846", fill_type="solid")
     HEADER_FONT = Font(color="FFFFFF", bold=True)
