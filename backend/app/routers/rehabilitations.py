@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session
 
 from app import crud, excel_utils, schemas
 from app.completion import missing_fields
-from app.dependencies import get_db
+from app.dependencies import get_db, require_active, require_admin, require_chef_or_admin
+from app.models import User
 from app.crud import SORTABLE_COLUMNS, SUP_CLASSES
 
 router = APIRouter(prefix="/api/rehabilitations", tags=["Réhabilitations"])
@@ -45,6 +46,7 @@ def list_rehabilitations(
     sortBy: str = Query("created_at"),
     sortOrder: str = Query("desc", pattern="^(asc|desc)$"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_active),
 ):
     if sup_class is not None and sup_class not in SUP_CLASSES:
         raise HTTPException(status_code=400, detail="Classe de superficie invalide.")
@@ -84,6 +86,7 @@ def list_incomplete_rehabilitations(
     sortBy: str = Query("created_at"),
     sortOrder: str = Query("desc", pattern="^(asc|desc)$"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_active),
 ):
     """Retourne les fiches qui possèdent au moins une donnée à renseigner."""
     if sup_class is not None and sup_class not in SUP_CLASSES:
@@ -107,7 +110,10 @@ def list_incomplete_rehabilitations(
 # Valeurs distinctes pour les listes déroulantes de filtres
 # ---------------------------------------------------------------------------
 @router.get("/filters", response_model=schemas.FiltersResponse)
-def get_filters(db: Session = Depends(get_db)):
+def get_filters(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_active),
+):
     return crud.get_filters(db)
 
 
@@ -116,7 +122,10 @@ def get_filters(db: Session = Depends(get_db)):
 # ---------------------------------------------------------------------------
 # NB : route statique, à déclarer avant la route dynamique "/{rehab_id}".
 @router.get("/brigades", response_model=list[schemas.BrigadeOut])
-def list_brigades(db: Session = Depends(get_db)):
+def list_brigades(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_active),
+):
     """Brigades distinctes regroupées par nom."""
     return crud.get_brigades(db)
 
@@ -125,6 +134,7 @@ def list_brigades(db: Session = Depends(get_db)):
 def list_brigades_detail(
     q: Optional[str] = Query(None, description="Recherche par nom, responsable, commune, village…"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_active),
 ):
     """Brigades avec toutes les informations agrégées (responsable, superficie, communes…)."""
     return crud.get_brigades_detail(db, q=q)
@@ -134,6 +144,7 @@ def list_brigades_detail(
 def export_brigades_excel(
     q: Optional[str] = Query(None),
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_active),
 ):
     """Exporte la liste des brigades (agrégée) au format Excel."""
     from openpyxl import Workbook
@@ -191,6 +202,7 @@ def export_brigades_excel(
 def export_departements_excel(
     q: Optional[str] = Query(None),
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_active),
 ):
     """Exporte la liste des départements (agrégée) au format Excel."""
     from openpyxl import Workbook
@@ -245,6 +257,7 @@ def export_departements_excel(
 def export_producteurs_excel(
     q: Optional[str] = Query(None),
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_active),
 ):
     """Exporte la liste des producteurs (agrégée) au format Excel."""
     from openpyxl import Workbook
@@ -297,7 +310,10 @@ def export_producteurs_excel(
 # Audit superficies — échantillonnage aléatoire
 # ---------------------------------------------------------------------------
 @router.get("/audit-sample", response_model=schemas.AuditSampleResponse)
-def get_audit_sample(db: Session = Depends(get_db)):
+def get_audit_sample(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_active),
+):
     """Génère un plan d'échantillonnage aléatoire pour l'audit des superficies."""
     result = crud.get_audit_sample(db)
 
@@ -334,6 +350,7 @@ def get_audit_sample(db: Session = Depends(get_db)):
 def export_audit_excel(
     brigades: Optional[str] = Query(None, description="Noms de brigades séparés par virgule"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_active),
 ):
     """Exporte le plan d'audit en Excel : Feuille A (echantillon) + Feuille B (hors echantillon)."""
     from openpyxl import Workbook
@@ -457,6 +474,7 @@ def export_audit_excel(
 def list_departements(
     q: Optional[str] = Query(None, description="Recherche par nom de département"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_active),
 ):
     """Départements distincts avec leurs agrégats (fiches, superficie, communes…)."""
     return crud.get_departements(db, q=q)
@@ -469,6 +487,7 @@ def list_departements(
 def list_producers(
     q: Optional[str] = Query(None, description="Recherche par nom, téléphone, commune ou village"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_active),
 ):
     """Producteurs distincts avec leurs informations agrégées (fiches, superficie, communes…)."""
     return crud.get_producers(db, q=q)
@@ -478,7 +497,10 @@ def list_producers(
 # Statistiques globales et agrégats
 # ---------------------------------------------------------------------------
 @router.get("/stats", response_model=schemas.StatsResponse)
-def get_stats(db: Session = Depends(get_db)):
+def get_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_active),
+):
     return crud.get_stats(db)
 # ---------------------------------------------------------------------------
 # Export CSV (respecte les filtres actifs)
@@ -494,6 +516,7 @@ def export_csv(
     annee: Optional[int] = None,
     sup_class: Optional[str] = None,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_active),
 ):
     rows = crud.get_all_for_export(
         db, q, departement, commune, arrondissement, village, brigade_name, annee, sup_class
@@ -541,7 +564,7 @@ def export_csv(
 # Modèle Excel à télécharger (mêmes colonnes que le fichier source)
 # ---------------------------------------------------------------------------
 @router.get("/import-template")
-def download_import_template():
+def download_import_template(current_user: User = Depends(require_active)):
     workbook = excel_utils.build_template_workbook()
     return _workbook_response(workbook, "modele_import_rehabilitations.xlsx")
 
@@ -560,6 +583,7 @@ def export_excel(
     annee: Optional[int] = None,
     sup_class: Optional[str] = None,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_active),
 ):
     rows = crud.get_all_for_export(
         db, q, departement, commune, arrondissement, village, brigade_name, annee, sup_class
@@ -579,6 +603,7 @@ def export_incomplete_excel(
     annee: Optional[int] = None,
     sup_class: Optional[str] = None,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_active),
 ):
     rows = crud.get_all_incomplete_for_export(
         db, q, departement, commune, arrondissement, village, brigade_name, annee, sup_class
@@ -591,7 +616,11 @@ def export_incomplete_excel(
 # Import Excel (structure identique au fichier source / au modèle téléchargeable)
 # ---------------------------------------------------------------------------
 @router.post("/import-excel", response_model=schemas.ImportResult)
-async def import_excel(file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def import_excel(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_chef_or_admin),
+):
     if not file.filename or not file.filename.lower().endswith((".xlsx", ".xlsm")):
         raise HTTPException(status_code=400, detail="Le fichier doit être au format Excel (.xlsx).")
 
@@ -623,7 +652,11 @@ async def import_excel(file: UploadFile = File(...), db: Session = Depends(get_d
 # Détail
 # ---------------------------------------------------------------------------
 @router.get("/{rehab_id}", response_model=schemas.RehabilitationOut)
-def get_rehabilitation(rehab_id: int, db: Session = Depends(get_db)):
+def get_rehabilitation(
+    rehab_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_active),
+):
     obj = crud.get_by_id(db, rehab_id)
     if not obj:
         raise HTTPException(status_code=404, detail="Fiche de réhabilitation introuvable.")
@@ -634,9 +667,18 @@ def get_rehabilitation(rehab_id: int, db: Session = Depends(get_db)):
 # Création
 # ---------------------------------------------------------------------------
 @router.post("", response_model=schemas.RehabilitationOut, status_code=201)
-def create_rehabilitation(payload: schemas.RehabilitationCreate, db: Session = Depends(get_db)):
+def create_rehabilitation(
+    payload: schemas.RehabilitationCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_active),
+):
     try:
-        return crud.create(db, payload)
+        obj = crud.create(db, payload)
+        # Lie automatiquement la fiche à son auteur (Phase 2)
+        obj.author_id = current_user.id
+        db.commit()
+        db.refresh(obj)
+        return obj
     except Exception as exc:  # pragma: no cover - erreurs DB génériques
         db.rollback()
         raise HTTPException(status_code=400, detail=f"Erreur lors de la création : {exc}") from exc
@@ -646,7 +688,12 @@ def create_rehabilitation(payload: schemas.RehabilitationCreate, db: Session = D
 # Mise à jour
 # ---------------------------------------------------------------------------
 @router.put("/{rehab_id}", response_model=schemas.RehabilitationOut)
-def update_rehabilitation(rehab_id: int, payload: schemas.RehabilitationUpdate, db: Session = Depends(get_db)):
+def update_rehabilitation(
+    rehab_id: int,
+    payload: schemas.RehabilitationUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_active),
+):
     obj = crud.get_by_id(db, rehab_id)
     if not obj:
         raise HTTPException(status_code=404, detail="Fiche de réhabilitation introuvable.")
@@ -664,13 +711,20 @@ def update_rehabilitation(rehab_id: int, payload: schemas.RehabilitationUpdate, 
 # dynamique "/{rehab_id}" : dans FastAPI, le routage se fait dans l'ordre de
 # déclaration. Sinon "all" tente d'être converti en int et renvoie un 422.
 @router.delete("/all")
-def clear_rehabilitations(db: Session = Depends(get_db)):
+def clear_rehabilitations(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
     deleted = crud.clear_all(db)
     return {"deleted": deleted, "message": "Toutes les fiches ont été supprimées."}
 
 
 @router.delete("/{rehab_id}")
-def delete_rehabilitation(rehab_id: int, db: Session = Depends(get_db)):
+def delete_rehabilitation(
+    rehab_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_chef_or_admin),
+):
     obj = crud.get_by_id(db, rehab_id)
     if not obj:
         raise HTTPException(status_code=404, detail="Fiche de réhabilitation introuvable.")
@@ -679,7 +733,11 @@ def delete_rehabilitation(rehab_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/bulk-delete")
-def delete_rehabilitations(payload: schemas.BulkDeleteRequest, db: Session = Depends(get_db)):
+def delete_rehabilitations(
+    payload: schemas.BulkDeleteRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_chef_or_admin),
+):
     ids = sorted(set(payload.ids))
     if not ids:
         raise HTTPException(status_code=400, detail="Aucune fiche sélectionnée.")

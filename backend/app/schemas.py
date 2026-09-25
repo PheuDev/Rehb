@@ -128,6 +128,8 @@ class RehabilitationOut(RehabilitationBase):
 
     id: int
     sup_class: Optional[str] = None
+    author_id: Optional[int] = None
+    plantation_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
 
