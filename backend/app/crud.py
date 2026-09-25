@@ -385,15 +385,13 @@ def _audit_class(superficie: float) -> str:
 def get_audit_sample(db: Session) -> dict:
     """Génère un plan d'échantillonnage aléatoire pour l'audit des superficies.
 
-    Contraintes satisfaites :
-    - Toutes les classes présentes dans la DB sont représentées.
-    - Toutes les brigades de chaque classe sont représentées.
-    - Au moins 1 fiche par brigade par classe.
-    - Superficie totale sélectionnée ≥ 20 % de la superficie totale du système.
+    Contraintes :
+    - Au moins 20 % de la superficie de CHAQUE brigade est couverte.
+    - La superficie totale sélectionnée >= 25 % de la superficie totale du système.
+    - Toutes les classes présentes sont représentées.
     """
     import random
 
-    # 1. Toutes les fiches avec superficie non nulle
     rows = (
         db.query(Rehabilitation)
         .filter(
@@ -406,84 +404,103 @@ def get_audit_sample(db: Session) -> dict:
     if not rows:
         return {
             "fiches": [],
+            "fiches_hors_echantillon": [],
             "total_fiches": 0,
             "superficie_echantillon": 0.0,
             "superficie_totale": 0.0,
             "pourcentage_couverture": 0.0,
             "par_classe": [],
+            "par_brigade": [],
         }
 
     superficie_totale = sum(float(r.superficie_rehabilitee) for r in rows)
-    seuil_20 = superficie_totale * 0.20
+    seuil_global = superficie_totale * 0.25
 
-    # 2. Regrouper par (classe, brigade_name)
-    groupes: dict[tuple, list] = {}
+    # Regrouper par brigade
+    par_brigade_fiches: dict[str, list] = {}
     for r in rows:
-        cls = _audit_class(float(r.superficie_rehabilitee))
         brigade = r.brigade_name or "— Sans brigade —"
-        key = (cls, brigade)
-        groupes.setdefault(key, []).append(r)
+        par_brigade_fiches.setdefault(brigade, []).append(r)
 
-    # 3. Tirer 1 fiche aléatoire par groupe (classe × brigade)
     selected_ids: set[int] = set()
     selected: list = []
 
-    for fiches_groupe in groupes.values():
-        fiche = random.choice(fiches_groupe)
-        if fiche.id not in selected_ids:
-            selected_ids.add(fiche.id)
-            selected.append(fiche)
+    # Pour chaque brigade : selectionner au moins 20% de sa superficie
+    for brigade, fiches_brigade in par_brigade_fiches.items():
+        sup_brigade = sum(float(r.superficie_rehabilitee) for r in fiches_brigade)
+        seuil_brigade = sup_brigade * 0.20
+        shuffled = fiches_brigade.copy()
+        random.shuffle(shuffled)
+        sup_brigade_sel = 0.0
+        for fiche in shuffled:
+            if fiche.id not in selected_ids:
+                selected_ids.add(fiche.id)
+                selected.append(fiche)
+                sup_brigade_sel += float(fiche.superficie_rehabilitee)
+                if sup_brigade_sel >= seuil_brigade:
+                    break
 
-    # 4. Compléter jusqu'à atteindre 20 % de la superficie totale
+    # Completer si le global n'atteint pas 25%
     superficie_echantillon = sum(float(r.superficie_rehabilitee) for r in selected)
-
-    if superficie_echantillon < seuil_20:
-        # Fiches non encore sélectionnées, triées par superficie décroissante
+    if superficie_echantillon < seuil_global:
         remaining = sorted(
             [r for r in rows if r.id not in selected_ids],
             key=lambda r: float(r.superficie_rehabilitee),
             reverse=True,
         )
         for fiche in remaining:
-            if superficie_echantillon >= seuil_20:
+            if superficie_echantillon >= seuil_global:
                 break
-            selected.append(fiche)
             selected_ids.add(fiche.id)
+            selected.append(fiche)
             superficie_echantillon += float(fiche.superficie_rehabilitee)
 
-    # 5. Construire la synthèse par classe
+    # Fiches hors echantillon
+    hors_echantillon = [r for r in rows if r.id not in selected_ids]
+
+    # Synthese par classe
     classe_map: dict[str, dict] = {}
     for label, _, _ in AUDIT_CLASSES:
         classe_map[label] = {"classe": label, "fiches": 0, "superficie": 0.0, "brigades": set()}
-
     for r in selected:
         cls = _audit_class(float(r.superficie_rehabilitee))
         classe_map[cls]["fiches"] += 1
         classe_map[cls]["superficie"] += float(r.superficie_rehabilitee)
         if r.brigade_name:
             classe_map[cls]["brigades"].add(r.brigade_name)
-
     par_classe = [
-        {
-            "classe": v["classe"],
-            "fiches": v["fiches"],
-            "superficie": round(v["superficie"], 2),
-            "nb_brigades": len(v["brigades"]),
-        }
-        for v in classe_map.values()
-        if v["fiches"] > 0
+        {"classe": v["classe"], "fiches": v["fiches"], "superficie": round(v["superficie"], 2), "nb_brigades": len(v["brigades"])}
+        for v in classe_map.values() if v["fiches"] > 0
     ]
+
+    # Synthese par brigade
+    par_brigade_synth = []
+    for brigade, fiches_brigade in par_brigade_fiches.items():
+        sup_b = sum(float(r.superficie_rehabilitee) for r in fiches_brigade)
+        sel_b = [r for r in fiches_brigade if r.id in selected_ids]
+        sup_sel_b = sum(float(r.superficie_rehabilitee) for r in sel_b)
+        par_brigade_synth.append({
+            "brigade": brigade,
+            "total_fiches": len(fiches_brigade),
+            "fiches_echantillon": len(sel_b),
+            "superficie_brigade": round(sup_b, 2),
+            "superficie_echantillon": round(sup_sel_b, 2),
+            "pourcentage": round((sup_sel_b / sup_b * 100) if sup_b else 0, 1),
+        })
+    par_brigade_synth.sort(key=lambda x: x["brigade"])
 
     superficie_echantillon = round(sum(float(r.superficie_rehabilitee) for r in selected), 2)
     pourcentage = round((superficie_echantillon / superficie_totale * 100) if superficie_totale else 0, 2)
 
     return {
         "fiches": selected,
+        "fiches_hors_echantillon": hors_echantillon,
         "total_fiches": len(selected),
         "superficie_echantillon": superficie_echantillon,
         "superficie_totale": round(superficie_totale, 2),
         "pourcentage_couverture": pourcentage,
         "par_classe": par_classe,
+        "par_brigade": par_brigade_synth,
     }
 
 

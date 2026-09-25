@@ -309,89 +309,123 @@ def get_audit_sample(db: Session = Depends(get_db)):
         fiche_data.audit_classe = crud._audit_class(sup) if sup else None
         fiches_out.append(fiche_data)
 
+
+    # Enrichir les fiches hors echantillon avec leur classe d'audit
+    hors_echantillon_out = []
+    for r in result["fiches_hors_echantillon"]:
+        sup = float(r.superficie_rehabilitee) if r.superficie_rehabilitee else None
+        fiche_data = schemas.AuditFicheOut.model_validate(r)
+        fiche_data.audit_classe = crud._audit_class(sup) if sup else None
+        hors_echantillon_out.append(fiche_data)
+
     return {
         "fiches": fiches_out,
+        "fiches_hors_echantillon": hors_echantillon_out,
         "total_fiches": result["total_fiches"],
         "superficie_echantillon": result["superficie_echantillon"],
         "superficie_totale": result["superficie_totale"],
         "pourcentage_couverture": result["pourcentage_couverture"],
         "par_classe": result["par_classe"],
+        "par_brigade": result["par_brigade"],
     }
 
 
 @router.get("/audit-sample/export-excel")
 def export_audit_excel(db: Session = Depends(get_db)):
-    """Génère et télécharge le plan d'audit en Excel (2 feuilles)."""
+    """Exporte le plan d'audit en Excel : Feuille A (echantillon) + Feuille B (hors echantillon)."""
     from openpyxl import Workbook
-    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.styles import Alignment, Font, PatternFill, Side, Border
     from openpyxl.utils import get_column_letter
 
     result = crud.get_audit_sample(db)
-    fiches = result["fiches"]
-    par_classe = result["par_classe"]
 
     HEADER_FILL = PatternFill(start_color="2D6846", end_color="2D6846", fill_type="solid")
     HEADER_FONT = Font(color="FFFFFF", bold=True)
+    BRIGADE_FILL = PatternFill(start_color="DCE0DC", end_color="DCE0DC", fill_type="solid")
+    BRIGADE_FONT = Font(bold=True)
+
+    COL_HEADERS = ["N°PDA", "Brigade", "Classe de superficie", "Departement", "Commune",
+                   "Arrondissement", "Village", "Producteur", "Superficie (ha)", "Annee"]
+
+    def _write_headers(ws):
+        ws.append(COL_HEADERS)
+        for i, _ in enumerate(COL_HEADERS, 1):
+            c = ws.cell(row=1, column=i)
+            c.fill = HEADER_FILL
+            c.font = HEADER_FONT
+            c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            ws.column_dimensions[get_column_letter(i)].width = 22
+        ws.row_dimensions[1].height = 28
+        ws.freeze_panes = "A2"
+
+    def _write_brigade_block(ws, brigade_name, fiches, row_num):
+        """Ecrit une ligne de titre de brigade puis les fiches."""
+        # Titre brigade
+        title_cell = ws.cell(row=row_num, column=1, value=f"  Brigade : {brigade_name}  ({len(fiches)} fiche(s))")
+        title_cell.fill = BRIGADE_FILL
+        title_cell.font = BRIGADE_FONT
+        ws.merge_cells(start_row=row_num, start_column=1, end_row=row_num, end_column=len(COL_HEADERS))
+        row_num += 1
+        for r in fiches:
+            sup = float(r.superficie_rehabilitee) if r.superficie_rehabilitee else None
+            ws.append([
+                r.pda_number,
+                r.brigade_name,
+                crud._audit_class(sup) if sup else None,
+                r.departement, r.commune, r.arrondissement, r.village,
+                r.producer_name, sup, r.annee_rehabilitation,
+            ])
+            row_num += 1
+        return row_num
 
     wb = Workbook()
 
-    # ── Feuille 1 : liste des fiches ──────────────────────────────────────
-    ws1 = wb.active
-    ws1.title = "Échantillon audit"
-    headers1 = [
-        "N°PDA", "Classe de superficie", "Département", "Commune",
-        "Arrondissement", "Village", "Brigade", "Producteur",
-        "Superficie (ha)", "Année",
-    ]
-    ws1.append(headers1)
-    for col_idx, _ in enumerate(headers1, start=1):
-        cell = ws1.cell(row=1, column=col_idx)
-        cell.fill = HEADER_FILL
-        cell.font = HEADER_FONT
-        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-        ws1.column_dimensions[get_column_letter(col_idx)].width = 22
-    ws1.row_dimensions[1].height = 30
-    ws1.freeze_panes = "A2"
+    # ── Feuille A : plantations dans l'echantillon ───────────────────────
+    ws_a = wb.active
+    ws_a.title = "A - Echantillon audit"
+    _write_headers(ws_a)
 
-    for r in fiches:
-        sup = float(r.superficie_rehabilitee) if r.superficie_rehabilitee else None
-        ws1.append([
-            r.pda_number,
-            crud._audit_class(sup) if sup else None,
-            r.departement,
-            r.commune,
-            r.arrondissement,
-            r.village,
-            r.brigade_name,
-            r.producer_name,
-            sup,
-            r.annee_rehabilitation,
-        ])
+    # Grouper les fiches de l'echantillon par brigade
+    brigades_a: dict[str, list] = {}
+    for r in result["fiches"]:
+        key = r.brigade_name or "— Sans brigade —"
+        brigades_a.setdefault(key, []).append(r)
 
-    # ── Feuille 2 : synthèse par classe ───────────────────────────────────
-    ws2 = wb.create_sheet("Synthèse par classe")
-    headers2 = ["Classe de superficie", "Fiches sélectionnées", "Superficie (ha)", "Brigades couvertes"]
-    ws2.append(headers2)
-    for col_idx, _ in enumerate(headers2, start=1):
-        cell = ws2.cell(row=1, column=col_idx)
-        cell.fill = HEADER_FILL
-        cell.font = HEADER_FONT
-        cell.alignment = Alignment(horizontal="center")
-        ws2.column_dimensions[get_column_letter(col_idx)].width = 26
-    ws2.freeze_panes = "A2"
+    row_a = 2
+    for brigade_name in sorted(brigades_a.keys()):
+        row_a = _write_brigade_block(ws_a, brigade_name, brigades_a[brigade_name], row_a)
+    ws_a.append([])
+    ws_a.append(["", "TOTAL ECHANTILLON", "", "", "", "", "", "",
+                 result["superficie_echantillon"],
+                 f"{result['pourcentage_couverture']} % de la superficie totale"])
 
-    for cls in par_classe:
-        ws2.append([cls["classe"], cls["fiches"], cls["superficie"], cls["nb_brigades"]])
+    # ── Feuille B : plantations hors echantillon ─────────────────────────
+    ws_b = wb.create_sheet("B - Hors echantillon")
+    _write_headers(ws_b)
 
-    # Ligne totaux
-    total_row = len(par_classe) + 2
-    ws2.cell(row=total_row, column=1, value="TOTAL").font = Font(bold=True)
-    ws2.cell(row=total_row, column=2, value=result["total_fiches"]).font = Font(bold=True)
-    ws2.cell(row=total_row, column=3, value=result["superficie_echantillon"]).font = Font(bold=True)
-    ws2.cell(row=total_row + 1, column=1, value="Superficie totale système").font = Font(italic=True)
-    ws2.cell(row=total_row + 1, column=3, value=result["superficie_totale"]).font = Font(italic=True)
-    ws2.cell(row=total_row + 2, column=1, value="Couverture (%)").font = Font(italic=True)
-    ws2.cell(row=total_row + 2, column=3, value=f"{result['pourcentage_couverture']} %").font = Font(italic=True)
+    brigades_b: dict[str, list] = {}
+    for r in result["fiches_hors_echantillon"]:
+        key = r.brigade_name or "— Sans brigade —"
+        brigades_b.setdefault(key, []).append(r)
+
+    row_b = 2
+    for brigade_name in sorted(brigades_b.keys()):
+        row_b = _write_brigade_block(ws_b, brigade_name, brigades_b[brigade_name], row_b)
+
+    # ── Feuille C : synthese par brigade ─────────────────────────────────
+    ws_c = wb.create_sheet("C - Synthese par brigade")
+    headers_c = ["Brigade", "Total fiches", "Fiches echantillon", "Superficie brigade (ha)",
+                 "Superficie echantillon (ha)", "Couverture (%)"]
+    ws_c.append(headers_c)
+    for i, _ in enumerate(headers_c, 1):
+        c = ws_c.cell(row=1, column=i)
+        c.fill = HEADER_FILL
+        c.font = HEADER_FONT
+        ws_c.column_dimensions[get_column_letter(i)].width = 26
+    ws_c.freeze_panes = "A2"
+    for b in result["par_brigade"]:
+        ws_c.append([b["brigade"], b["total_fiches"], b["fiches_echantillon"],
+                     b["superficie_brigade"], b["superficie_echantillon"], f"{b['pourcentage']} %"])
 
     buffer = io.BytesIO()
     wb.save(buffer)
