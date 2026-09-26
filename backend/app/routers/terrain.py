@@ -141,6 +141,17 @@ class ReplacementCreate(BaseModel):
     replacement_plantation_id: int = Field(..., description="Plantation choisie comme remplacement")
 
 
+class StockReplacementCreate(BaseModel):
+    replacement_plantation_id: int = Field(
+        ...,
+        description="Plantation hors-échantillon à marquer comme utilisée",
+    )
+    original_plantation_id: int = Field(
+        ...,
+        description="Plantation échantillonnée à remplacer (même brigade)",
+    )
+
+
 class ReplacementOut(BaseModel):
     id: int
     original_plantation_id: int
@@ -458,6 +469,90 @@ def list_plantations(
 
     plantations = query.order_by(Plantation.pda_number).all()
     return [_plantation_to_out(p, db) for p in plantations]
+
+
+@router.get(
+    "/api/plantations/hors-echantillon",
+    response_model=list[PlantationOut],
+    summary="Stock de plantations hors-échantillon (remplacements possibles)",
+)
+def list_hors_echantillon_plantations(
+    brigade_id: Optional[int] = Query(None, description="Filtrer par brigade"),
+    q: Optional[str] = Query(None, description="Recherche N°PDA / producteur / commune / village"),
+    current_user: User = Depends(require_active),
+    db: Session = Depends(get_db),
+):
+    """Plantations hors-échantillon disponibles.
+
+    - Visible pour l'équipe : uniquement les brigades qui lui sont affectées.
+    - Les plantations déjà marquées « utilisée » (grisées) apparaissent avec
+      ``is_locked`` / ``locked_by_me`` / ``replacement_id``.
+    """
+    if brigade_id is not None:
+        _brigade_or_404(db, brigade_id)
+
+    query = db.query(Plantation).filter(Plantation.is_sample.is_(False))
+    if current_user.role != "admin" and current_user.team_id:
+        brigade_ids = (
+            db.query(TeamBrigadeAssignment.brigade_id)
+            .filter(TeamBrigadeAssignment.team_id == current_user.team_id)
+        )
+        query = query.filter(Plantation.brigade_id.in_(brigade_ids))
+    if brigade_id is not None:
+        query = query.filter(Plantation.brigade_id == brigade_id)
+    if q:
+        like = f"%{q}%"
+        query = query.filter(
+            or_(
+                Plantation.pda_number.ilike(like),
+                Plantation.producer_name.ilike(like),
+                Plantation.commune.ilike(like),
+                Plantation.village.ilike(like),
+            )
+        )
+
+    plantations = query.order_by(Plantation.pda_number).all()
+    return [_plantation_to_out(p, db, current_user) for p in plantations]
+
+
+@router.get(
+    "/api/plantations/echantillon",
+    response_model=list[PlantationOut],
+    summary="Plantations échantillonnées d'une brigade (candidates au remplacement)",
+)
+def list_echantillon_plantations(
+    brigade_id: Optional[int] = Query(None, description="Filtrer par brigade"),
+    current_user: User = Depends(require_active),
+    db: Session = Depends(get_db),
+):
+    """Plantations échantillonnées (is_sample=True) d'une brigade.
+
+    Les plantations déjà « remplacées » sont exclues : une plantation
+    échantillonnée ne peut être remplacée qu'UNE seule fois.
+    """
+    if brigade_id is not None:
+        _brigade_or_404(db, brigade_id)
+
+    query = db.query(Plantation).filter(Plantation.is_sample.is_(True))
+    if current_user.role != "admin" and current_user.team_id:
+        brigade_ids = (
+            db.query(TeamBrigadeAssignment.brigade_id)
+            .filter(TeamBrigadeAssignment.team_id == current_user.team_id)
+        )
+        query = query.filter(Plantation.brigade_id.in_(brigade_ids))
+    if brigade_id is not None:
+        query = query.filter(Plantation.brigade_id == brigade_id)
+
+    # Exclusion des plantations déjà remplacées.
+    replaced_ids = {
+        pid
+        for (pid,) in db.query(ReplacementSelection.original_plantation_id).all()
+    }
+    if replaced_ids:
+        query = query.filter(~Plantation.id.in_(replaced_ids))
+
+    plantations = query.order_by(Plantation.pda_number).all()
+    return [_plantation_to_out(p, db, current_user) for p in plantations]
 
 
 @router.post(
@@ -1059,6 +1154,149 @@ def delete_replacement(
     db.delete(sel)
     db.commit()
     return {"message": "Remplacement dégrisé.", "replacement_id": replacement_id}
+
+
+@router.post(
+    "/api/replacements/from-stock",
+    response_model=ReplacementOut,
+    status_code=201,
+    summary="Marquer une plantation hors-échantillon comme utilisée (remplacement)",
+)
+def create_stock_replacement(
+    payload: StockReplacementCreate,
+    current_user: User = Depends(require_active),
+    db: Session = Depends(get_db),
+):
+    """Permet à une équipe de remplacer une plantation échantillonnée par une
+    plantation hors-échantillon de la MÊME brigade.
+
+    - La plantation hors-échantillon devient « grisée » : elle ne peut plus être
+      marquée une seconde fois (contrainte de non-réutilisation).
+    - La plantation échantillonnée passe au statut « remplacée » dans
+      « Mes plantations ».
+    """
+    original = _plantation_or_404(db, payload.original_plantation_id)
+    replacement = _plantation_or_404(db, payload.replacement_plantation_id)
+
+    # Périmètre équipe : chef/binôme limités aux brigades de leur équipe.
+    if current_user.role != "admin":
+        if current_user.team_id is None:
+            raise HTTPException(403, "Votre compte n'est rattaché à aucune équipe.")
+        allowed = {
+            bid
+            for (bid,) in (
+                db.query(TeamBrigadeAssignment.brigade_id)
+                .filter(TeamBrigadeAssignment.team_id == current_user.team_id)
+                .all()
+            )
+        }
+        if original.brigade_id not in allowed or replacement.brigade_id not in allowed:
+            raise HTTPException(
+                403,
+                "Ces plantations n'appartiennent pas aux brigades de votre équipe.",
+            )
+
+    if replacement.is_sample:
+        raise HTTPException(
+            400,
+            "La plantation à marquer doit être hors-échantillon.",
+        )
+    if not original.is_sample:
+        raise HTTPException(
+            400,
+            "La plantation à remplacer doit appartenir à l'échantillon.",
+        )
+    if original.id == replacement.id:
+        raise HTTPException(400, "Impossible de remplacer une plantation par elle-même.")
+    if original.brigade_id is not None and replacement.brigade_id != original.brigade_id:
+        raise HTTPException(
+            400,
+            "Le remplacement doit appartenir à la même brigade que la plantation échantillonnée.",
+        )
+
+    # Non-réutilisation du remplaçant (grisé après le premier choix).
+    already = (
+        db.query(ReplacementSelection)
+        .filter(ReplacementSelection.replacement_plantation_id == replacement.id)
+        .first()
+    )
+    if already:
+        raise HTTPException(
+            409,
+            "Cette plantation hors-échantillon a déjà été marquée comme utilisée "
+            "pour un autre remplacement.",
+        )
+    # Une plantation échantillonnée ne peut être remplacée qu'une seule fois.
+    already_replaced = (
+        db.query(ReplacementSelection)
+        .filter(ReplacementSelection.original_plantation_id == original.id)
+        .first()
+    )
+    if already_replaced:
+        raise HTTPException(
+            409,
+            "Cette plantation échantillonnée a déjà été remplacée.",
+        )
+
+    # Binôme détenteur de la sélection : binôme courant, sinon le binôme qui a
+    # la plantation à remplacer, sinon le premier binôme de l'équipe.
+    binome_id = current_user.binome_id
+    if binome_id is None:
+        sa = (
+            db.query(SampleAssignment)
+            .filter(SampleAssignment.plantation_id == original.id)
+            .first()
+        )
+        if sa:
+            binome_id = sa.binome_id
+    team_id = current_user.team_id
+    if team_id is None:
+        if binome_id is not None:
+            bin = db.query(Binome).filter(Binome.id == binome_id).first()
+            team_id = bin.team_id if bin else None
+    if binome_id is None:
+        first = (
+            db.query(Binome)
+            .filter(Binome.team_id == team_id)
+            .order_by(Binome.id)
+            .first()
+        )
+        if first:
+            binome_id = first.id
+    if binome_id is None:
+        raise HTTPException(
+            400,
+            "Aucun binôme disponible pour rattacher ce remplacement : créez un "
+            "binôme dans votre équipe.",
+        )
+
+    try:
+        sel = ReplacementSelection(
+            original_plantation_id=original.id,
+            replacement_plantation_id=replacement.id,
+            binome_id=binome_id,
+            locked_by_id=current_user.id,
+        )
+        db.add(sel)
+        db.commit()
+        db.refresh(sel)
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            409,
+            "Cette plantation vient d'être marquée comme utilisée par quelqu'un d'autre.",
+        )
+
+    return ReplacementOut(
+        id=sel.id,
+        original_plantation_id=sel.original_plantation_id,
+        replacement_plantation_id=sel.replacement_plantation_id,
+        binome_id=sel.binome_id,
+        locked_at=sel.locked_at.isoformat(),
+        locked_by_id=sel.locked_by_id,
+        locked_by_name=current_user.full_name or current_user.username,
+        locked_by_me=True,
+    )
 
 
 # =============================================================================

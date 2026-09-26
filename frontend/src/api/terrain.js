@@ -169,6 +169,25 @@ export async function exportTeamPlantationsExcel(teamId) {
   downloadBlob(response.data, `plantations_equipe_${teamId}.xlsx`);
 }
 
+// ── Stock de remplacement : plantations hors-échantillon ─────────────────────
+export async function listHorsEchantillonPlantations(params) {
+  const { data } = await client.get("/plantations/hors-echantillon", { params });
+  return data;
+}
+
+export async function listEchantillonPlantations(params) {
+  const { data } = await client.get("/plantations/echantillon", { params });
+  return data;
+}
+
+export async function createStockReplacement(replacementPlantationId, originalPlantationId) {
+  const { data } = await client.post("/replacements/from-stock", {
+    replacement_plantation_id: replacementPlantationId,
+    original_plantation_id: originalPlantationId,
+  });
+  return data;
+}
+
 export async function assignPlantationsToBinome(binomeId, plantationIds) {
   const { data } = await client.post(`/binomes/${binomeId}/plantations`, {
     plantation_ids: plantationIds,

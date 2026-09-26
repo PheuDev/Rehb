@@ -10,6 +10,7 @@ import {
   Settings,
   Shovel,
   TreeDeciduous,
+  Trees,
   Users,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -29,6 +30,7 @@ const NAV_SECTIONS = [
     items: [
       { path: "/terrain",    icon: Shovel,      label: "Mes plantations", accent: "bg-lime-100 text-lime-700",   roles: ["admin", "chef_equipe", "binome"] },
       { path: "/mes-fiches", icon: FileText,    label: "Mes fiches",      accent: "bg-teal-100 text-teal-700",   roles: ["admin", "chef_equipe", "binome"] },
+      { path: "/plantations-hors-echantillon", icon: Trees, label: "Plantations hors échantillon", accent: "bg-amber-100 text-amber-700", roles: ["admin", "chef_equipe", "binome"] },
     ],
   },
   {
