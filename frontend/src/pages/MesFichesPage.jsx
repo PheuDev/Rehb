@@ -5,6 +5,7 @@
  * Un lien permet d'ouvrir la fiche complète dans la page principale.
  */
 import { useEffect, useState, useCallback } from "react";
+import { useSidebarState } from "../hooks/useSidebarState.js";
 import { useNavigate } from "react-router-dom";
 import { ExternalLink, RefreshCw, FileText } from "lucide-react";
 import AppHeader from "../components/AppHeader.jsx";
@@ -23,7 +24,7 @@ function formatDate(iso) {
 export default function MesFichesPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useSidebarState();
   const [fiches, setFiches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");

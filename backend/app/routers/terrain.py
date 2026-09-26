@@ -114,6 +114,7 @@ class PlantationOut(BaseModel):
     brigade_id: Optional[int]
     brigade_name: Optional[str] = None
     is_sample: bool
+    inspection_completed: bool = False
     is_replaced: bool = False   # True si une plantation de remplacement a été choisie
     is_locked: bool = False     # True si utilisée comme remplacement (grisée)
     locked_by_me: bool = False  # True si c'est l'utilisateur courant qui l'a grisée
@@ -165,6 +166,10 @@ class ReplacementOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class InspectionCompletionUpdate(BaseModel):
+    completed: bool
 
 
 # =============================================================================
@@ -234,6 +239,7 @@ def _plantation_to_out(
         brigade_id=p.brigade_id,
         brigade_name=p.brigade.name if p.brigade else None,
         is_sample=p.is_sample,
+        inspection_completed=p.inspection_completed,
         is_replaced=replaced,
         is_locked=lock is not None,
         locked_by_me=bool(lock and current_user is not None and lock.locked_by_id == current_user.id),
@@ -551,6 +557,7 @@ def list_hors_echantillon_plantations(
 )
 def list_echantillon_plantations(
     brigade_id: Optional[int] = Query(None, description="Filtrer par brigade"),
+    include_replaced: bool = Query(False, description="Inclure les fiches déjà remplacées pour le suivi d'équipe"),
     current_user: User = Depends(require_active),
     db: Session = Depends(get_db),
 ):
@@ -583,16 +590,47 @@ def list_echantillon_plantations(
     if brigade_id is not None:
         query = query.filter(Plantation.brigade_id == brigade_id)
 
-    # Exclusion des plantations déjà remplacées.
-    replaced_ids = {
-        pid
-        for (pid,) in db.query(ReplacementSelection.original_plantation_id).all()
-    }
-    if replaced_ids:
-        query = query.filter(~Plantation.id.in_(replaced_ids))
+    if not include_replaced:
+        replaced_ids = {
+            pid
+            for (pid,) in db.query(ReplacementSelection.original_plantation_id).all()
+        }
+        if replaced_ids:
+            query = query.filter(~Plantation.id.in_(replaced_ids))
 
     plantations = query.order_by(Plantation.pda_number).all()
     return [_plantation_to_out(p, db, current_user) for p in plantations]
+
+
+@router.patch(
+    "/api/plantations/{plantation_id}/inspection",
+    response_model=PlantationOut,
+    summary="Mettre à jour l'état d'inspection d'une fiche échantillonnée",
+)
+def update_inspection_status(
+    plantation_id: int,
+    payload: InspectionCompletionUpdate,
+    current_user: User = Depends(require_active),
+    db: Session = Depends(get_db),
+):
+    plantation = _plantation_or_404(db, plantation_id)
+    if not plantation.is_sample:
+        raise HTTPException(400, "Seules les fiches échantillonnées ont un statut d'inspection.")
+    if current_user.role != "admin":
+        if current_user.team_id is None:
+            raise HTTPException(403, "Votre compte n'est rattaché à aucune équipe.")
+        assigned = db.query(TeamBrigadeAssignment.id).filter(
+            TeamBrigadeAssignment.team_id == current_user.team_id,
+            TeamBrigadeAssignment.brigade_id == plantation.brigade_id,
+        ).first()
+        latest_ids = _latest_suggestion_fiche_ids(db, "fiches")
+        if not assigned or plantation.source_rehabilitation_id not in latest_ids:
+            raise HTTPException(403, "Cette fiche ne fait pas partie de la mission de votre équipe.")
+
+    plantation.inspection_completed = payload.completed
+    db.commit()
+    db.refresh(plantation)
+    return _plantation_to_out(plantation, db, current_user)
 
 
 @router.post(

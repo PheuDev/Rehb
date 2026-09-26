@@ -1,4 +1,5 @@
 ﻿import { useState, useMemo } from "react";
+import { useSidebarState } from "../hooks/useSidebarState.js";
 import {
   ArrowLeft, BarChart3, ChevronDown, ChevronUp, ChevronsUpDown,
   ClipboardCheck, Download, RefreshCw, Save, Search, Settings2, TreeDeciduous, Percent, X,
@@ -55,7 +56,7 @@ const CLASS_ORDER = [
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function AuditSuperficiePage() {
   const navigate = useNavigate();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useSidebarState();
   const [result, setResult]           = useState(null);
   const [loading, setLoading]         = useState(false);
   const [exporting, setExporting]     = useState(false);

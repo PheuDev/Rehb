@@ -242,6 +242,28 @@ def list_binomes(
     ]
 
 
+@router.get(
+    "/api/teams/{team_id}/members",
+    response_model=list[UserOut],
+    summary="Membres d'une équipe",
+)
+def list_team_members(
+    team_id: int,
+    current_user: User = Depends(require_active),
+    db: Session = Depends(get_db),
+):
+    _get_team_or_404(db, team_id)
+    if current_user.role != "admin" and current_user.team_id != team_id:
+        raise HTTPException(status_code=403, detail="Accès refusé.")
+    members = (
+        db.query(User)
+        .filter(User.team_id == team_id, User.is_active.is_(True))
+        .order_by(User.full_name, User.username)
+        .all()
+    )
+    return [_user_to_out(member) for member in members]
+
+
 @router.post(
     "/api/teams/{team_id}/binomes",
     response_model=BinomeOut,

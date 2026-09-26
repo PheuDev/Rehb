@@ -1091,6 +1091,8 @@ def dispatch_audit_suggestion_to_teams(
             db.flush()
             stats["plantations_created"] += 1
         else:
+            # Une nouvelle suggestion démarre une nouvelle mission d'inspection.
+            plantation.inspection_completed = False
             stats["plantations_reused"] += 1
 
         if rehab_id:

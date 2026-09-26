@@ -1,4 +1,5 @@
 ﻿import { useEffect, useState, useMemo } from "react";
+import { useSidebarState } from "../hooks/useSidebarState.js";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -83,7 +84,7 @@ export default function BrigadesPage() {
   const [brigades, setBrigades] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useSidebarState();
 
   const [query, setQuery] = useState("");
   const debouncedQ = useDebounce(query, 350);

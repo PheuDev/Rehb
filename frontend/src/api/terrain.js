@@ -49,6 +49,11 @@ export async function listTeamBrigades(teamId) {
   return data;
 }
 
+export async function getTeam(teamId) {
+  const { data } = await client.get(`/teams/${teamId}`);
+  return data;
+}
+
 export async function listUnassignedBrigades() {
   const { data } = await client.get("/brigades/unassigned");
   return data;
@@ -77,6 +82,11 @@ export async function deleteTeam(id) {
 // ── Binômes ───────────────────────────────────────────────────────────────────
 export async function listBinomes(teamId) {
   const { data } = await client.get(`/teams/${teamId}/binomes`);
+  return data;
+}
+
+export async function listTeamMembers(teamId) {
+  const { data } = await client.get(`/teams/${teamId}/members`);
   return data;
 }
 
@@ -177,6 +187,11 @@ export async function listHorsEchantillonPlantations(params) {
 
 export async function listEchantillonPlantations(params) {
   const { data } = await client.get("/plantations/echantillon", { params });
+  return data;
+}
+
+export async function updateInspectionStatus(plantationId, completed) {
+  const { data } = await client.patch(`/plantations/${plantationId}/inspection`, { completed });
   return data;
 }
 

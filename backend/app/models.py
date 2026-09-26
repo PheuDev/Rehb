@@ -299,6 +299,12 @@ class Plantation(Base):
         default=False,
         comment="True = appartient à l'échantillon initial ; ne peut pas être un remplacement",
     )
+    inspection_completed = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        comment="Inspection terrain terminée pour cette tâche de l'échantillon",
+    )
     source_rehabilitation_id = Column(
         Integer,
         ForeignKey("rehabilitations.id", ondelete="SET NULL"),

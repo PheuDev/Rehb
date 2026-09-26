@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useSidebarState } from "../hooks/useSidebarState.js";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft, ClipboardCheck, Download, Eye, RefreshCw, Trash2,
@@ -89,7 +90,7 @@ export default function FichesAuditPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
 
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useSidebarState();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");

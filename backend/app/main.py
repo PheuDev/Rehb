@@ -131,6 +131,7 @@ BASE_DDL = [
         superficie     NUMERIC(10,2),
         brigade_id     INTEGER       REFERENCES brigade_entities (id) ON DELETE SET NULL,
         is_sample      BOOLEAN       NOT NULL DEFAULT FALSE,
+        inspection_completed BOOLEAN NOT NULL DEFAULT FALSE,
         created_at     TIMESTAMPTZ   DEFAULT NOW()
     )""",
     "CREATE INDEX IF NOT EXISTS ix_plantation_brigade   ON plantations (brigade_id)",
@@ -579,6 +580,16 @@ def migrate_plantations_audit_source() -> None:
     )
 
 
+def migrate_plantation_inspection_status() -> None:
+    """Statut d'inspection, ajouté sans toucher aux plantations existantes."""
+    if engine.dialect.name != "postgresql":
+        return
+    _exec_ddl(
+        "ALTER TABLE plantations ADD COLUMN IF NOT EXISTS inspection_completed BOOLEAN NOT NULL DEFAULT FALSE",
+        "plantations.inspection_completed",
+    )
+
+
 def migrate_teams_schema() -> None:
     """Adapte la table ``teams`` au modèle « équipe permanente » (sans campagne).
 
@@ -808,6 +819,7 @@ STARTUP_STEPS = (
     ("schéma de base (tables, index, vue)", ensure_database_schema),
     ("colonnes Phase 2 (author_id, plantation_id)", migrate_phase2_columns),
     ("plantations — source fiche audit", migrate_plantations_audit_source),
+    ("statut d'inspection des plantations", migrate_plantation_inspection_status),
     ("colonnes nullables", migrate_nullable_rehabilitations),
     ("équipes sans campagne", migrate_teams_schema),
     ("affectations brigade → équipe", migrate_assignments_schema),

@@ -180,8 +180,11 @@ CREATE TABLE IF NOT EXISTS plantations (
     superficie     NUMERIC(10,2),
     brigade_id     INTEGER       REFERENCES brigade_entities (id) ON DELETE SET NULL,
     is_sample      BOOLEAN       NOT NULL DEFAULT FALSE,
+    inspection_completed BOOLEAN NOT NULL DEFAULT FALSE,
     created_at     TIMESTAMPTZ   DEFAULT NOW()
 );
+
+ALTER TABLE plantations ADD COLUMN IF NOT EXISTS inspection_completed BOOLEAN NOT NULL DEFAULT FALSE;
 
 ALTER TABLE plantations ADD COLUMN IF NOT EXISTS source_rehabilitation_id INTEGER
     REFERENCES rehabilitations (id) ON DELETE SET NULL;

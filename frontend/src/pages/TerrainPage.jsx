@@ -7,6 +7,7 @@
  *  3. Depuis une plantation (attribuée ou remplacement) → Créer une fiche d'audit
  */
 import { useEffect, useState, useCallback } from "react";
+import { useSidebarState } from "../hooks/useSidebarState.js";
 import { Search, AlertTriangle, CheckCircle2, ArrowRight, Plus, RefreshCw, Download, Lock } from "lucide-react";
 import AppHeader from "../components/AppHeader.jsx";
 import Sidebar from "../components/Sidebar.jsx";
@@ -324,7 +325,7 @@ function AuditModal({ open, onClose, plantation }) {
 // ─── Page principale ──────────────────────────────────────────────────────────
 export default function TerrainPage() {
   const { user } = useAuth();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useSidebarState();
   const [plantations, setPlantations] = useState([]);
   const [replacements, setReplacements] = useState([]);
   const [loading, setLoading] = useState(true);

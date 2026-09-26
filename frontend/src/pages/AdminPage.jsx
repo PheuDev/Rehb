@@ -7,6 +7,7 @@
  *  3. Utilisateurs
  */
 import { useEffect, useState } from "react";
+import { useSidebarState } from "../hooks/useSidebarState.js";
 import {
   Plus, Pencil, Trash2, Users, Link2, UserCog,
   ChevronDown, ChevronRight, Save, X,
@@ -515,7 +516,7 @@ function UsersSection() {
 
 // ─── Page principale ──────────────────────────────────────────────────────────
 export default function AdminPage() {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useSidebarState();
   const [activeTab, setActiveTab] = useState("teams");
 
   const sections = {

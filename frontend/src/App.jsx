@@ -14,6 +14,8 @@ import AdminPage from "./pages/AdminPage.jsx";
 import TerrainPage from "./pages/TerrainPage.jsx";
 import MesFichesPage from "./pages/MesFichesPage.jsx";
 import PlantationsHorsEchantillonPage from "./pages/PlantationsHorsEchantillonPage.jsx";
+import MesBrigadesPage from "./pages/MesBrigadesPage.jsx";
+import MonEquipePage from "./pages/MonEquipePage.jsx";
 
 export default function App() {
   return (
@@ -46,6 +48,16 @@ export default function App() {
           <Route path="/plantations-hors-echantillon" element={
             <PrivateRoute roles={["admin", "chef_equipe", "binome"]}>
               <PlantationsHorsEchantillonPage />
+            </PrivateRoute>
+          } />
+          <Route path="/mes-brigades" element={
+            <PrivateRoute roles={["chef_equipe", "binome"]}>
+              <MesBrigadesPage />
+            </PrivateRoute>
+          } />
+          <Route path="/mon-equipe" element={
+            <PrivateRoute roles={["chef_equipe", "binome"]}>
+              <MonEquipePage />
             </PrivateRoute>
           } />
 

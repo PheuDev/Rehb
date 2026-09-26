@@ -28,7 +28,7 @@ from app.models import (
     TeamBrigadeAssignment,
     User,
 )
-from app.routers import terrain
+from app.routers import terrain, users
 
 ADMIN = User(
     id=1, username="admin", full_name="Admin", role="admin",
@@ -119,6 +119,7 @@ def make_client_builder():
     def build(user: User) -> TestClient:
         app = FastAPI()
         app.include_router(terrain.router)
+        app.include_router(users.router)
         app.dependency_overrides[get_db] = override_get_db
         app.dependency_overrides[require_active] = lambda: user
         app.dependency_overrides[require_admin] = lambda: user
@@ -151,6 +152,45 @@ def test_unassigned_user_cannot_list_plantations_from_all_teams():
     assert hors.json() == []
     assert sample.status_code == 200
     assert sample.json() == []
+
+
+def test_team_member_can_mark_sample_inspection_completed_and_reopen_it():
+    build, _ = make_client_builder()
+    client = build(BINOME_A)
+
+    completed = client.patch("/api/plantations/1/inspection", json={"completed": True})
+    assert completed.status_code == 200
+    assert completed.json()["inspection_completed"] is True
+
+    tasks = client.get("/api/plantations/echantillon", params={"include_replaced": True})
+    assert tasks.status_code == 200
+    assert next(task for task in tasks.json() if task["id"] == 1)["inspection_completed"] is True
+
+    reopened = client.patch("/api/plantations/1/inspection", json={"completed": False})
+    assert reopened.status_code == 200
+    assert reopened.json()["inspection_completed"] is False
+
+
+def test_inspection_status_is_limited_to_the_users_team_and_sample_fiches():
+    build, _ = make_client_builder()
+
+    other_team = build(CHEF_B).patch("/api/plantations/1/inspection", json={"completed": True})
+    replacement_stock = build(CHEF_A).patch("/api/plantations/3/inspection", json={"completed": True})
+
+    assert other_team.status_code == 403
+    assert replacement_stock.status_code == 400
+
+
+def test_team_member_can_list_only_their_own_team_members():
+    build, _ = make_client_builder()
+    client = build(BINOME_A)
+
+    own_team = client.get("/api/teams/1/members")
+    other_team = client.get("/api/teams/2/members")
+
+    assert own_team.status_code == 200
+    assert {member["id"] for member in own_team.json()} == {2, 4}
+    assert other_team.status_code == 403
 
 
 def test_list_echantillon_excludes_already_replaced():

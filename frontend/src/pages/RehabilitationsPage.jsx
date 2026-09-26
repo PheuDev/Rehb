@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSidebarState } from "../hooks/useSidebarState.js";
 import { useSearchParams } from "react-router-dom";
 import { ClipboardList, List } from "lucide-react";
 
@@ -67,7 +68,7 @@ export default function RehabilitationsPage() {
   const [stats, setStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(true);
 
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useSidebarState();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);

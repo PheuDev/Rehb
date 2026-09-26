@@ -10,6 +10,7 @@
  *     Mes plantations.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSidebarState } from "../hooks/useSidebarState.js";
 import {
   CheckCircle2, Lock, RefreshCw, Search,
 } from "lucide-react";
@@ -31,7 +32,7 @@ export default function PlantationsHorsEchantillonPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
 
-  const [sidebarOpen, setSidebarOpen]         = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useSidebarState();
   const [brigades, setBrigades]               = useState([]);
   const [selectedBrigadeId, setSelectedBrigadeId] = useState("");
   const [search, setSearch]                   = useState("");

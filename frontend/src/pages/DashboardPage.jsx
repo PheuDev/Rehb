@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSidebarState } from "../hooks/useSidebarState.js";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -331,7 +332,7 @@ function BarBrigades({ data }) {
 export default function DashboardPage() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useSidebarState();
 
   useEffect(() => {
     async function load() {

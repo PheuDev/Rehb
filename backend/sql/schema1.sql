@@ -146,8 +146,11 @@ CREATE TABLE IF NOT EXISTS plantations (
     brigade_id     INTEGER       REFERENCES brigade_entities (id) ON DELETE SET NULL,
     -- TRUE = appartient à l'échantillon initial ; ne peut pas être remplacement (vérifié côté API)
     is_sample      BOOLEAN       NOT NULL DEFAULT FALSE,
+    inspection_completed BOOLEAN NOT NULL DEFAULT FALSE,
     created_at     TIMESTAMPTZ   DEFAULT NOW()
 );
+
+ALTER TABLE plantations ADD COLUMN IF NOT EXISTS inspection_completed BOOLEAN NOT NULL DEFAULT FALSE;
 
 CREATE INDEX IF NOT EXISTS ix_plantation_brigade   ON plantations (brigade_id);
 CREATE INDEX IF NOT EXISTS ix_plantation_is_sample ON plantations (is_sample);
