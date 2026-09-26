@@ -37,16 +37,16 @@ export function Modal({ open, onClose, title, children, footer, size = "lg" }) {
   if (!open) return null;
   const sizes = { sm: "max-w-md", md: "max-w-xl", lg: "max-w-3xl", xl: "max-w-5xl" };
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className={`w-full ${sizes[size]} max-h-[90vh] overflow-hidden rounded-xl bg-white shadow-xl flex flex-col`}>
-        <div className="flex items-center justify-between border-b px-6 py-4">
-          <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
-          <button onClick={onClose} className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-2 sm:items-center sm:p-4">
+      <div className={`w-full ${sizes[size]} max-h-[92dvh] overflow-hidden rounded-2xl bg-white shadow-xl flex flex-col sm:max-h-[90vh] sm:rounded-xl`}>
+        <div className="flex items-center justify-between gap-3 border-b px-4 py-3 sm:px-6 sm:py-4">
+          <h2 className="min-w-0 text-base font-semibold text-gray-900 sm:text-lg">{title}</h2>
+          <button type="button" aria-label="Fermer" onClick={onClose} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600">
             <X size={20} />
           </button>
         </div>
-        <div className="overflow-y-auto px-6 py-4 flex-1">{children}</div>
-        {footer && <div className="border-t px-6 py-4 flex justify-end gap-2">{footer}</div>}
+        <div className="flex-1 overflow-y-auto px-4 py-3 sm:px-6 sm:py-4">{children}</div>
+        {footer && <div className="flex justify-end gap-2 border-t px-4 py-3 sm:px-6 sm:py-4">{footer}</div>}
       </div>
     </div>
   );
@@ -170,8 +170,8 @@ export function Spinner({ size = 24 }) {
 
 export function EmptyState({ message = "Aucune donnée trouvée." }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-2 py-16 text-gray-400">
-      <Inbox size={40} />
+    <div className="flex flex-col items-center justify-center gap-2 py-10 text-center text-gray-400 sm:py-16">
+      <Inbox size={32} className="sm:h-10 sm:w-10" />
       <p className="text-sm">{message}</p>
     </div>
   );

@@ -151,30 +151,30 @@ export default function PlantationsHorsEchantillonPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-16">
+    <div className="min-h-screen bg-gray-50 pb-8 sm:pb-16">
       <AppHeader sidebarOpen={sidebarOpen} onToggleSidebar={() => setSidebarOpen((v) => !v)} />
-      <div className="mx-auto flex max-w-7xl items-start gap-6 px-4 py-6 sm:px-6">
+      <div className="mx-auto flex max-w-7xl items-start gap-3 px-3 py-3 sm:gap-6 sm:px-6 sm:py-6">
         {sidebarOpen && <Sidebar onClose={() => setSidebarOpen(false)} />}
-        <main className="min-w-0 flex-1 space-y-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+        <main className="min-w-0 flex-1 space-y-4 sm:space-y-5">
+          <div className="flex items-center justify-between gap-2">
             <div>
-              <h2 className="text-xl font-semibold text-gray-900">Mes plantations hors échantillon</h2>
-              <p className="text-sm text-gray-500 mt-1">
+              <h2 className="text-lg font-semibold text-gray-900 sm:text-xl">Hors échantillon</h2>
+              <p className="mt-0.5 text-xs text-gray-500 sm:mt-1 sm:text-sm">
                 Fiches de la feuille hors-échantillon de la dernière suggestion enregistrée.
                 Marquez une fiche comme utilisée pour remplacer une fiche échantillonnée de la même brigade.
               </p>
             </div>
-            <button type="button" className="btn-secondary text-sm" onClick={loadList}>
-              <RefreshCw size={14} /> Actualiser
+            <button type="button" aria-label="Actualiser les plantations" title="Actualiser" className="btn-secondary h-10 w-10 shrink-0 p-0 sm:w-auto sm:px-4" onClick={loadList}>
+              <RefreshCw size={14} /><span className="hidden sm:inline">Actualiser</span>
             </button>
           </div>
 
           {/* Filtres */}
-          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 bg-white p-3">
-            <label className="flex items-center gap-2 text-sm text-gray-600">
+          <div className="grid gap-2 rounded-xl border border-gray-200 bg-white p-2.5 sm:flex sm:flex-wrap sm:items-center sm:gap-3 sm:p-3">
+            <label className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-2 text-xs text-gray-600 sm:flex sm:text-sm">
               Brigade
               <select
-                className="input"
+                className="input min-w-0 py-2"
                 value={selectedBrigadeId}
                 onChange={(e) => setSelectedBrigadeId(e.target.value)}
               >
@@ -184,17 +184,17 @@ export default function PlantationsHorsEchantillonPage() {
                 ))}
               </select>
             </label>
-            <div className="relative">
+            <div className="relative w-full sm:w-64">
               <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
-                className="input pl-9"
+                className="input pl-9 py-2"
                 placeholder="Rechercher…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
             {plantations.length > 0 && (
-              <span className="text-xs text-gray-400">{plantations.length} plantation(s)</span>
+              <span className="text-xs text-gray-400 sm:ml-auto">{plantations.length} plantation(s)</span>
             )}
           </div>
 
@@ -207,7 +207,45 @@ export default function PlantationsHorsEchantillonPage() {
           ) : listError ? null : plantations.length === 0 ? (
             <EmptyState message="Aucune plantation hors-échantillon pour cette brigade." />
           ) : (
-            <div className="overflow-x-auto rounded-xl border bg-white">
+            <>
+            <ul className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200 bg-white sm:hidden">
+              {plantations.map((p) => {
+                const locked = p.is_locked;
+                return (
+                  <li key={p.id} className={`p-3 ${locked ? "bg-gray-50/70" : ""}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-gray-900">{p.pda_number || "Sans N° PDA"}</p>
+                        <p className="mt-0.5 truncate text-xs text-gray-600">{p.producer_name || "Producteur non renseigné"}</p>
+                        <p className="mt-0.5 truncate text-xs text-gray-500">{[p.village, p.commune].filter(Boolean).join(", ") || "Localisation non renseignée"}</p>
+                      </div>
+                      <span className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-medium ${locked ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}>
+                        {locked ? "Utilisée" : "Disponible"}
+                      </span>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <div className="text-xs text-gray-500">
+                        {p.brigade_name || "Brigade inconnue"}{p.superficie != null ? ` · ${formatNumber(p.superficie)} ha` : ""}
+                        {locked && p.locked_by_name ? <span className="block">Par {p.locked_by_name}</span> : null}
+                      </div>
+                      {locked ? (
+                        p.locked_by_me && (
+                          <button type="button" className="btn-secondary min-h-10 shrink-0 px-3 py-2 text-xs" disabled={saving} onClick={() => handleUnlock(p)}>
+                            Dégriser
+                          </button>
+                        )
+                      ) : (
+                        <button type="button" className="btn-primary min-h-10 shrink-0 px-3 py-2 text-xs" disabled={saving} onClick={() => openUseModal(p)}>
+                          Marquer utilisée
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+
+            <div className="hidden overflow-x-auto rounded-xl border bg-white sm:block">
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
                   <tr>
@@ -279,9 +317,10 @@ export default function PlantationsHorsEchantillonPage() {
                 </tbody>
               </table>
             </div>
+            </>
           )}
 
-          <p className="text-xs text-gray-400">
+          <p className="hidden text-xs text-gray-400 sm:block">
             Une plantation hors-échantillon utilisée est grisée : elle ne peut pas être choisie
             deux fois. La plantation échantillonnée remplacée passe au statut « remplacée » dans
             Mes plantations.

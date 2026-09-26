@@ -30,7 +30,7 @@ import { linkFicheToPlantation } from "../api/terrain.js";
 function PlantationCard({ plantation, onSignal, onAudit, isReplacement = false, readOnly = false }) {
   const replaced = plantation.is_replaced;
   return (
-    <div className={`rounded-xl border bg-white p-4 space-y-2 ${replaced ? "opacity-60" : ""}`}>
+    <div className={`rounded-xl border bg-white p-3 space-y-2 sm:p-4 ${replaced ? "opacity-60" : ""}`}>
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="font-semibold text-gray-800">
@@ -56,12 +56,12 @@ function PlantationCard({ plantation, onSignal, onAudit, isReplacement = false, 
 
       <div className="flex gap-2 pt-1">
         {!readOnly && !replaced && !isReplacement && (
-          <button className="btn-secondary text-xs py-1 px-3 flex items-center gap-1 text-orange-600 border-orange-200 hover:bg-orange-50"
+          <button className="btn-secondary min-h-10 flex-1 justify-center px-2 py-2 text-xs text-orange-600 border-orange-200 hover:bg-orange-50 sm:min-h-0 sm:flex-none sm:px-3 sm:py-1"
             onClick={() => onSignal(plantation)}>
             <AlertTriangle size={13} /> Introuvable
           </button>
         )}
-        <button className="btn-primary text-xs py-1 px-3 flex items-center gap-1"
+        <button className="btn-primary min-h-10 flex-1 justify-center px-2 py-2 text-xs sm:min-h-0 sm:flex-none sm:px-3 sm:py-1"
           onClick={() => onAudit(plantation)}>
           <Plus size={13} /> Fiche d'audit
         </button>
@@ -379,22 +379,22 @@ export default function TerrainPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <AppHeader sidebarOpen={sidebarOpen} onToggleSidebar={() => setSidebarOpen(v => !v)} />
-      <div className="mx-auto flex max-w-7xl gap-6 px-4 py-6 sm:px-6">
+      <div className="mx-auto flex max-w-7xl items-start gap-3 px-3 py-3 sm:gap-6 sm:px-6 sm:py-6">
         {sidebarOpen && <Sidebar onClose={() => setSidebarOpen(false)} />}
-        <main className="flex-1 min-w-0 space-y-6">
-          <div className="flex items-center justify-between">
+        <main className="min-w-0 flex-1 space-y-4 sm:space-y-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-xl font-semibold text-gray-900">Mes plantations</h2>
-              <p className="text-sm text-gray-500 mt-1">
+              <h2 className="text-lg font-semibold text-gray-900 sm:text-xl">Mes plantations</h2>
+              <p className="mt-0.5 text-xs text-gray-500 sm:mt-1 sm:text-sm">
                 {isBinome
                   ? "Plantations attribuées à votre binôme pour audit."
                   : "Plantations reçues par votre équipe (brigades qui lui sont confiées)."}
               </p>
             </div>
-            <div className="flex gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:flex">
               <button
                 type="button"
-                className="btn-secondary text-sm"
+                className="btn-secondary min-h-10 px-2 text-xs sm:text-sm"
                 disabled={exporting || plantations.length === 0}
                 onClick={async () => {
                   setExporting(true);
@@ -408,7 +408,7 @@ export default function TerrainPage() {
                 {exporting ? <Spinner size={14} /> : <Download size={14} />}
                 Excel
               </button>
-              <button type="button" className="btn-secondary text-sm" onClick={loadData}>
+              <button type="button" aria-label="Actualiser les plantations" className="btn-secondary min-h-10 px-2 text-xs sm:text-sm" onClick={loadData}>
                 <RefreshCw size={14} /> Actualiser
               </button>
             </div>
@@ -424,7 +424,7 @@ export default function TerrainPage() {
                   ? "Aucune plantation attribuée à votre binôme."
                   : "Aucune plantation reçue par votre équipe pour l'instant."} />
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
                   {plantations.map(p => (
                     <PlantationCard key={p.id} plantation={p}
                       readOnly={!isBinome}
@@ -440,7 +440,7 @@ export default function TerrainPage() {
                   <h3 className="text-base font-semibold text-gray-700 pt-2">
                     Remplacements sélectionnés ({replacements.length})
                   </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
                     {replacements.map(r => {
                       // On affiche la plantation de remplacement avec les données disponibles
                       const mockPlantation = {
