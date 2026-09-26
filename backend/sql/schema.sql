@@ -329,6 +329,23 @@ END
 $$;
 
 -- =========================================================================
+-- Suggestions d'audit superficie sauvegardées
+-- =========================================================================
+CREATE TABLE IF NOT EXISTS saved_audit_suggestions (
+    id                      SERIAL PRIMARY KEY,
+    title                   VARCHAR(200) NOT NULL,
+    created_by_id           INTEGER REFERENCES users (id) ON DELETE SET NULL,
+    brigade_filter          JSONB,
+    snapshot                JSONB NOT NULL,
+    nb_fiches_echantillon   INTEGER NOT NULL DEFAULT 0,
+    superficie_echantillon  NUMERIC(12,2),
+    pourcentage_couverture  NUMERIC(6,2),
+    created_at              TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS ix_saved_audit_created_by ON saved_audit_suggestions (created_by_id);
+CREATE INDEX IF NOT EXISTS ix_saved_audit_created_at ON saved_audit_suggestions (created_at);
+
+-- =========================================================================
 -- Vue de synthèse (enrichie avec auteur)
 -- =========================================================================
 DROP VIEW IF EXISTS v_rehabilitations_synthese;

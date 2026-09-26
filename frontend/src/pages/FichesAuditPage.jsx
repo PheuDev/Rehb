@@ -192,6 +192,7 @@ export default function FichesAuditPage() {
                     <th className="px-3 py-3 text-center text-xs font-medium text-gray-400">Fiches</th>
                     <th className="px-3 py-3 text-right text-xs font-medium text-gray-400">Superficie</th>
                     <th className="px-3 py-3 text-center text-xs font-medium text-gray-400">Couverture</th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-400">Filtre</th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-400">Actions</th>
                   </tr>
                 </thead>
@@ -209,6 +210,13 @@ export default function FichesAuditPage() {
                       </td>
                       <td className="px-3 py-3 text-center text-gray-600">
                         {row.pourcentage_couverture != null ? `${row.pourcentage_couverture} %` : "—"}
+                      </td>
+                      <td className="px-3 py-3 text-xs text-gray-500 max-w-[140px] truncate" title={
+                        row.brigade_filter?.length ? row.brigade_filter.join(", ") : undefined
+                      }>
+                        {row.brigade_filter?.length
+                          ? `${row.brigade_filter.length} brigade(s)`
+                          : "Toutes"}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex justify-end gap-1">

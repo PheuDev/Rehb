@@ -12,6 +12,7 @@ from sqlalchemy import (
     Computed,
     Index,
     UniqueConstraint,
+    JSON,
     func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -423,8 +424,16 @@ class SavedAuditSuggestion(Base):
         nullable=True,
         index=True,
     )
-    brigade_filter = Column(JSONB, nullable=True, comment="Filtre brigades actif à la sauvegarde")
-    snapshot = Column(JSONB, nullable=False, comment="Résultat complet de l'échantillon d'audit")
+    brigade_filter = Column(
+        JSON().with_variant(JSONB, "postgresql"),
+        nullable=True,
+        comment="Filtre brigades actif à la sauvegarde",
+    )
+    snapshot = Column(
+        JSON().with_variant(JSONB, "postgresql"),
+        nullable=False,
+        comment="Résultat complet de l'échantillon d'audit",
+    )
     nb_fiches_echantillon = Column(Integer, nullable=False, default=0)
     superficie_echantillon = Column(Numeric(12, 2), nullable=True)
     pourcentage_couverture = Column(Numeric(6, 2), nullable=True)

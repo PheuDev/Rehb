@@ -3,7 +3,7 @@ import io
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app import crud, excel_utils, schemas
@@ -557,6 +557,7 @@ def delete_audit_suggestion(
 ):
     if not crud.delete_saved_audit_suggestion(db, suggestion_id):
         raise HTTPException(status_code=404, detail="Suggestion introuvable.")
+    return Response(status_code=204)
 
 
 # ---------------------------------------------------------------------------
