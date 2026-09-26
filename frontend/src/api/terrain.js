@@ -138,6 +138,37 @@ export async function listBiномePlantations(binomeId) {
   return data;
 }
 
+function downloadBlob(data, filename) {
+  const url = window.URL.createObjectURL(new Blob([data]));
+  const link = document.createElement("a");
+  link.href = url;
+  link.setAttribute("download", filename);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+export async function exportBinomePlantationsExcel(binomeId) {
+  const response = await client.get(`/binomes/${binomeId}/plantations/export-excel`, {
+    responseType: "blob",
+  });
+  downloadBlob(response.data, `plantations_binome_${binomeId}.xlsx`);
+}
+
+// ── Plantations d'une équipe (« Mes plantations » du chef / admin) ───────────
+export async function listTeamPlantations(teamId) {
+  const { data } = await client.get(`/teams/${teamId}/plantations`);
+  return data;
+}
+
+export async function exportTeamPlantationsExcel(teamId) {
+  const response = await client.get(`/teams/${teamId}/plantations/export-excel`, {
+    responseType: "blob",
+  });
+  downloadBlob(response.data, `plantations_equipe_${teamId}.xlsx`);
+}
+
 export async function assignPlantationsToBinome(binomeId, plantationIds) {
   const { data } = await client.post(`/binomes/${binomeId}/plantations`, {
     plantation_ids: plantationIds,

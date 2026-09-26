@@ -299,6 +299,13 @@ class Plantation(Base):
         default=False,
         comment="True = appartient à l'échantillon initial ; ne peut pas être un remplacement",
     )
+    source_rehabilitation_id = Column(
+        Integer,
+        ForeignKey("rehabilitations.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="Fiche d'origine lors d'une distribution d'audit",
+    )
 
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
@@ -443,4 +450,45 @@ class SavedAuditSuggestion(Base):
 
     __table_args__ = (
         Index("ix_saved_audit_created_at", "created_at"),
+    )
+
+
+class TeamAuditAssignment(Base):
+    """Plantation d'un échantillon d'audit distribuée à une équipe (via ses brigades)."""
+
+    __tablename__ = "team_audit_assignments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    audit_suggestion_id = Column(
+        Integer,
+        ForeignKey("saved_audit_suggestions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    team_id = Column(
+        Integer,
+        ForeignKey("teams.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    plantation_id = Column(
+        Integer,
+        ForeignKey("plantations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    rehabilitation_id = Column(
+        Integer,
+        ForeignKey("rehabilitations.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+
+    audit_suggestion = relationship("SavedAuditSuggestion")
+    team = relationship("Team")
+    plantation = relationship("Plantation")
+
+    __table_args__ = (
+        UniqueConstraint("team_id", "plantation_id", name="uq_team_audit_plantation"),
+        Index("ix_team_audit_team", "team_id"),
+        Index("ix_team_audit_suggestion", "audit_suggestion_id"),
     )

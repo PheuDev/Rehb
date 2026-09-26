@@ -287,6 +287,18 @@ BASE_DDL = [
     )""",
     "CREATE INDEX IF NOT EXISTS ix_saved_audit_created_by ON saved_audit_suggestions (created_by_id)",
     "CREATE INDEX IF NOT EXISTS ix_saved_audit_created_at ON saved_audit_suggestions (created_at)",
+
+    """CREATE TABLE IF NOT EXISTS team_audit_assignments (
+        id                    SERIAL PRIMARY KEY,
+        audit_suggestion_id   INTEGER NOT NULL REFERENCES saved_audit_suggestions (id) ON DELETE CASCADE,
+        team_id               INTEGER NOT NULL REFERENCES teams (id) ON DELETE CASCADE,
+        plantation_id         INTEGER NOT NULL REFERENCES plantations (id) ON DELETE CASCADE,
+        rehabilitation_id     INTEGER REFERENCES rehabilitations (id) ON DELETE SET NULL,
+        created_at            TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT uq_team_audit_plantation UNIQUE (team_id, plantation_id)
+    )""",
+    "CREATE INDEX IF NOT EXISTS ix_team_audit_team ON team_audit_assignments (team_id)",
+    "CREATE INDEX IF NOT EXISTS ix_team_audit_suggestion ON team_audit_assignments (audit_suggestion_id)",
 ]
 
 
@@ -534,6 +546,35 @@ def migrate_phase2_columns() -> None:
     )
 
 
+def migrate_plantations_audit_source() -> None:
+    """Colonne source_rehabilitation_id sur plantations (distribution d'audit)."""
+    if engine.dialect.name != "postgresql":
+        return
+    _exec_ddl(
+        "ALTER TABLE plantations ADD COLUMN IF NOT EXISTS source_rehabilitation_id INTEGER",
+        "plantations.source_rehabilitation_id",
+    )
+    fk_exists = _scalar(
+        "SELECT 1 FROM information_schema.table_constraints tc "
+        "JOIN information_schema.key_column_usage kcu "
+        "  ON tc.constraint_name = kcu.constraint_name "
+        "WHERE tc.table_name = 'plantations' "
+        "  AND tc.constraint_type = 'FOREIGN KEY' "
+        "  AND kcu.column_name = 'source_rehabilitation_id'"
+    )
+    if not fk_exists:
+        _exec_ddl(
+            "ALTER TABLE plantations "
+            "ADD CONSTRAINT fk_plantation_source_rehab "
+            "FOREIGN KEY (source_rehabilitation_id) REFERENCES rehabilitations(id) ON DELETE SET NULL",
+            "fk_plantation_source_rehab",
+        )
+    _exec_ddl(
+        "CREATE INDEX IF NOT EXISTS ix_plantation_source_rehab ON plantations (source_rehabilitation_id)",
+        "ix_plantation_source_rehab",
+    )
+
+
 def migrate_teams_schema() -> None:
     """Adapte la table ``teams`` au modèle « équipe permanente » (sans campagne).
 
@@ -754,6 +795,7 @@ def _seed_default_admin() -> None:
 STARTUP_STEPS = (
     ("schéma de base (tables, index, vue)", ensure_database_schema),
     ("colonnes Phase 2 (author_id, plantation_id)", migrate_phase2_columns),
+    ("plantations — source fiche audit", migrate_plantations_audit_source),
     ("colonnes nullables", migrate_nullable_rehabilitations),
     ("équipes sans campagne", migrate_teams_schema),
     ("affectations brigade → équipe", migrate_assignments_schema),

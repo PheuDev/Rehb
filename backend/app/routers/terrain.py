@@ -13,9 +13,11 @@ Routes fiches liées     : GET  /api/binomes/{id}/rehabilitations  → "mes fich
                           POST /api/rehabilitations/{id}/link-plantation
 """
 
+import io
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -34,11 +36,14 @@ from app.models import (
     Rehabilitation,
     SampleAssignment,
     Team,
+    TeamAuditAssignment,
     TeamBrigadeAssignment,
     User,
 )
 
 router = APIRouter(tags=["Terrain — Phase 2"])
+
+XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
 # =============================================================================
@@ -541,6 +546,178 @@ def list_binome_plantations(
         .all()
     )
     return [_plantation_to_out(p, db) for p in plantations]
+
+
+@router.get(
+    "/api/binomes/{binome_id}/plantations/export-excel",
+    summary="Exporter les plantations attribuées au binôme (Excel)",
+)
+def export_binome_plantations_excel(
+    binome_id: int,
+    current_user: User = Depends(require_active),
+    db: Session = Depends(get_db),
+):
+    """Télécharge la liste des plantations d'audit attribuées au binôme."""
+    binome = _binome_or_404(db, binome_id)
+    if current_user.role == "binome" and current_user.binome_id != binome_id:
+        raise HTTPException(403, "Accès refusé.")
+    if current_user.role == "chef_equipe" and binome.team_id != current_user.team_id:
+        raise HTTPException(403, "Ce binôme n'appartient pas à votre équipe.")
+
+    assignments = (
+        db.query(SampleAssignment)
+        .filter(SampleAssignment.binome_id == binome_id)
+        .all()
+    )
+    plantation_ids = [a.plantation_id for a in assignments]
+    plantations = (
+        db.query(Plantation)
+        .filter(Plantation.id.in_(plantation_ids))
+        .order_by(Plantation.pda_number)
+        .all()
+    )
+    return _plantations_excel_response(plantations, f"plantations_binome_{binome_id}.xlsx")
+
+
+# =============================================================================
+# Routes — Plantations d'une équipe (« Mes plantations » du chef / admin)
+# =============================================================================
+
+def _plantations_excel_response(plantations, filename):
+    """Construit la réponse Excel « Mes plantations » (binôme ou équipe)."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    headers = [
+        "N° PDA", "Producteur", "Brigade", "Département", "Commune",
+        "Village", "Superficie (ha)", "Échantillon",
+    ]
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Mes plantations"
+    ws.append(headers)
+    header_fill = PatternFill(start_color="2D6846", end_color="2D6846", fill_type="solid")
+    header_font = Font(color="FFFFFF", bold=True)
+    for idx, _ in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=idx)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        ws.column_dimensions[get_column_letter(idx)].width = 22
+    ws.freeze_panes = "A2"
+
+    for p in plantations:
+        ws.append([
+            p.pda_number,
+            p.producer_name,
+            p.brigade.name if p.brigade else None,
+            p.departement,
+            p.commune,
+            p.village,
+            float(p.superficie) if p.superficie is not None else None,
+            "Oui" if p.is_sample else "Non",
+        ])
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return StreamingResponse(
+        buffer,
+        media_type=XLSX_MEDIA_TYPE,
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+def _team_plantation_ids(db: Session, team_id: int) -> list[int]:
+    """Identifiants des plantations attribuées à une équipe.
+
+    Sources :
+    - liens d'audit équipe (``team_audit_assignments``) — créés à la
+      sauvegarde d'une suggestion d'audit selon les brigades affectées ;
+    - attributions aux binômes de l'équipe (``sample_assignments``).
+    Dédupliqués puis triés.
+    """
+    ids: set[int] = set()
+    for (pid,) in (
+        db.query(TeamAuditAssignment.plantation_id)
+        .filter(TeamAuditAssignment.team_id == team_id)
+        .all()
+    ):
+        ids.add(pid)
+    for (binome_id,) in db.query(Binome.id).filter(Binome.team_id == team_id).all():
+        for (pid,) in (
+            db.query(SampleAssignment.plantation_id)
+            .filter(SampleAssignment.binome_id == binome_id)
+            .all()
+        ):
+            ids.add(pid)
+    return sorted(ids)
+
+
+def _check_team_scope(current_user: User, team_id: int) -> None:
+    """Un chef d'équipe ne consulte que sa propre équipe ; un admin, toutes."""
+    if current_user.role == "binome":
+        raise HTTPException(403, "Accès réservé au chef d'équipe ou à l'administrateur.")
+    if current_user.role != "admin" and current_user.team_id != team_id:
+        raise HTTPException(403, "Cette équipe n'est pas la vôtre.")
+
+
+@router.get(
+    "/api/teams/{team_id}/plantations",
+    response_model=list[PlantationOut],
+    summary="Plantations attribuées à une équipe",
+)
+def list_team_plantations(
+    team_id: int,
+    current_user: User = Depends(require_active),
+    db: Session = Depends(get_db),
+):
+    """Retourne les plantations d'audit reçues par une équipe (via ses brigades).
+
+    - Un chef d'équipe ne voit que les plantations de sa propre équipe.
+    - Un admin peut consulter n'importe quelle équipe.
+    """
+    if not db.query(Team).filter(Team.id == team_id).first():
+        raise HTTPException(404, "Équipe introuvable.")
+    _check_team_scope(current_user, team_id)
+
+    ids = _team_plantation_ids(db, team_id)
+    if not ids:
+        return []
+    plantations = (
+        db.query(Plantation)
+        .filter(Plantation.id.in_(ids))
+        .order_by(Plantation.pda_number)
+        .all()
+    )
+    return [_plantation_to_out(p, db) for p in plantations]
+
+
+@router.get(
+    "/api/teams/{team_id}/plantations/export-excel",
+    summary="Exporter les plantations attribuées à une équipe (Excel)",
+)
+def export_team_plantations_excel(
+    team_id: int,
+    current_user: User = Depends(require_active),
+    db: Session = Depends(get_db),
+):
+    """Télécharge la liste des plantations d'audit reçues par une équipe."""
+    if not db.query(Team).filter(Team.id == team_id).first():
+        raise HTTPException(404, "Équipe introuvable.")
+    _check_team_scope(current_user, team_id)
+
+    ids = _team_plantation_ids(db, team_id)
+    plantations = (
+        db.query(Plantation)
+        .filter(Plantation.id.in_(ids))
+        .order_by(Plantation.pda_number)
+        .all()
+        if ids
+        else []
+    )
+    return _plantations_excel_response(plantations, f"plantations_equipe_{team_id}.xlsx")
 
 
 @router.post(

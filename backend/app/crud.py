@@ -4,7 +4,18 @@ from typing import Optional
 from sqlalchemy import or_, func, asc, desc
 from sqlalchemy.orm import Session
 
-from app.models import BrigadeEntity, Rehabilitation, SavedAuditSuggestion, TeamBrigadeAssignment, User
+from app.models import (
+    Binome,
+    BrigadeEntity,
+    Plantation,
+    Rehabilitation,
+    SampleAssignment,
+    SavedAuditSuggestion,
+    Team,
+    TeamAuditAssignment,
+    TeamBrigadeAssignment,
+    User,
+)
 from app.schemas import RehabilitationCreate, RehabilitationUpdate
 from app.completion import incomplete_condition
 
@@ -869,6 +880,159 @@ def get_all_incomplete_for_export(
     ).filter(incomplete_condition()).order_by(Rehabilitation.id).all()
 
 
+def _ensure_brigade_entities_from_names(db: Session, names: list[str]) -> None:
+    """Crée les entités brigade manquantes (noms issus des fiches d'audit)."""
+    existing = {b.name for b in db.query(BrigadeEntity).all()}
+    for raw in names:
+        name = (raw or "").strip()
+        if not name or name in existing:
+            continue
+        db.add(BrigadeEntity(name=name))
+        existing.add(name)
+    db.flush()
+
+
+def dispatch_audit_suggestion_to_teams(
+    db: Session,
+    suggestion_id: int,
+    snapshot: dict,
+) -> dict:
+    """Distribue les fiches de l'échantillon aux équipes via leurs brigades affectées."""
+    fiches = snapshot.get("fiches") or []
+    stats = {
+        "fiches_total": len(fiches),
+        "fiches_dispatched": 0,
+        "plantations_created": 0,
+        "plantations_reused": 0,
+        "binome_assignments_created": 0,
+        "teams": {},
+        "warnings": [],
+    }
+    if not fiches:
+        return {**stats, "teams": []}
+
+    brigade_names = [
+        (f.get("brigade_name") or "").strip()
+        for f in fiches
+        if (f.get("brigade_name") or "").strip()
+    ]
+    _ensure_brigade_entities_from_names(db, brigade_names)
+
+    brigades = db.query(BrigadeEntity).all()
+    brigade_by_name = {b.name: b for b in brigades}
+    brigade_by_lower = {b.name.lower(): b for b in brigades}
+
+    team_by_brigade = {
+        row.brigade_id: row.team_id
+        for row in db.query(TeamBrigadeAssignment).all()
+    }
+    teams = {t.id: t for t in db.query(Team).all()}
+    binomes_by_team: dict[int, list[int]] = {}
+    for binome in db.query(Binome).all():
+        binomes_by_team.setdefault(binome.team_id, []).append(binome.id)
+
+    for fiche in fiches:
+        rehab_id = fiche.get("id")
+        bname = (fiche.get("brigade_name") or "").strip()
+        if not bname:
+            stats["warnings"].append(f"Fiche {rehab_id or '?'} : brigade absente — ignorée.")
+            continue
+
+        brigade = brigade_by_name.get(bname) or brigade_by_lower.get(bname.lower())
+        if not brigade:
+            stats["warnings"].append(f"Brigade « {bname} » introuvable dans le référentiel.")
+            continue
+
+        team_id = team_by_brigade.get(brigade.id)
+        if not team_id:
+            stats["warnings"].append(
+                f"Brigade « {bname} » n'est affectée à aucune équipe (Administration → Affectations)."
+            )
+            continue
+
+        binome_ids = binomes_by_team.get(team_id) or []
+        if not binome_ids:
+            team_label = teams[team_id].name if team_id in teams else f"#{team_id}"
+            stats["warnings"].append(
+                f"Équipe « {team_label} » : aucun binôme — "
+                "la fiche reste attribuée à l'équipe (visible côté chef d'équipe)."
+            )
+
+        plantation = None
+        if rehab_id:
+            plantation = (
+                db.query(Plantation)
+                .filter(Plantation.source_rehabilitation_id == rehab_id)
+                .first()
+            )
+        if not plantation:
+            plantation = Plantation(
+                pda_number=fiche.get("pda_number"),
+                producer_name=fiche.get("producer_name"),
+                departement=fiche.get("departement"),
+                commune=fiche.get("commune"),
+                arrondissement=fiche.get("arrondissement"),
+                village=fiche.get("village"),
+                superficie=fiche.get("superficie_rehabilitee"),
+                brigade_id=brigade.id,
+                is_sample=True,
+                source_rehabilitation_id=rehab_id,
+            )
+            db.add(plantation)
+            db.flush()
+            stats["plantations_created"] += 1
+        else:
+            stats["plantations_reused"] += 1
+
+        if rehab_id:
+            rehab = db.query(Rehabilitation).filter(Rehabilitation.id == rehab_id).first()
+            if rehab and rehab.plantation_id != plantation.id:
+                rehab.plantation_id = plantation.id
+
+        team_audit = (
+            db.query(TeamAuditAssignment)
+            .filter(
+                TeamAuditAssignment.team_id == team_id,
+                TeamAuditAssignment.plantation_id == plantation.id,
+            )
+            .first()
+        )
+        if not team_audit:
+            db.add(
+                TeamAuditAssignment(
+                    audit_suggestion_id=suggestion_id,
+                    team_id=team_id,
+                    plantation_id=plantation.id,
+                    rehabilitation_id=rehab_id,
+                )
+            )
+
+        for binome_id in binome_ids:
+            exists = (
+                db.query(SampleAssignment)
+                .filter(
+                    SampleAssignment.plantation_id == plantation.id,
+                    SampleAssignment.binome_id == binome_id,
+                )
+                .first()
+            )
+            if not exists:
+                db.add(SampleAssignment(plantation_id=plantation.id, binome_id=binome_id))
+                stats["binome_assignments_created"] += 1
+
+        stats["fiches_dispatched"] += 1
+        team_name = teams[team_id].name if team_id in teams else f"Équipe #{team_id}"
+        bucket = stats["teams"].setdefault(
+            team_id,
+            {"team_id": team_id, "team_name": team_name, "fiches": 0, "binomes": len(binome_ids)},
+        )
+        bucket["fiches"] += 1
+
+    db.flush()
+    stats["teams"] = list(stats["teams"].values())
+    return stats
+
+
 def create_saved_audit_suggestion(
     db: Session,
     *,
@@ -876,7 +1040,7 @@ def create_saved_audit_suggestion(
     title: str,
     snapshot: dict,
     brigade_filter: Optional[list[str]] = None,
-) -> SavedAuditSuggestion:
+) -> tuple[SavedAuditSuggestion, dict]:
     row = SavedAuditSuggestion(
         title=title,
         created_by_id=user.id,
@@ -887,9 +1051,11 @@ def create_saved_audit_suggestion(
         pourcentage_couverture=snapshot.get("pourcentage_couverture"),
     )
     db.add(row)
+    db.flush()
+    dispatch = dispatch_audit_suggestion_to_teams(db, row.id, snapshot)
     db.commit()
     db.refresh(row)
-    return row
+    return row, dispatch
 
 
 def list_saved_audit_suggestions(db: Session) -> list[SavedAuditSuggestion]:

@@ -7,22 +7,25 @@
  *  3. Depuis une plantation (attribuée ou remplacement) → Créer une fiche d'audit
  */
 import { useEffect, useState, useCallback } from "react";
-import { Search, AlertTriangle, CheckCircle2, ArrowRight, Plus, RefreshCw } from "lucide-react";
+import { Search, AlertTriangle, CheckCircle2, ArrowRight, Plus, RefreshCw, Download } from "lucide-react";
 import AppHeader from "../components/AppHeader.jsx";
 import Sidebar from "../components/Sidebar.jsx";
 import { Modal, Spinner, EmptyState } from "../components/ui.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import {
   listBiномePlantations,
+  listTeamPlantations,
   listAvailableReplacements,
   createReplacement,
   listBinomeReplacements,
+  exportBinomePlantationsExcel,
+  exportTeamPlantationsExcel,
 } from "../api/terrain.js";
 import { createRehabilitation, updateRehabilitation } from "../api/rehabilitations.js";
 import { linkFicheToPlantation } from "../api/terrain.js";
 
 // ─── Carte plantation ─────────────────────────────────────────────────────────
-function PlantationCard({ plantation, onSignal, onAudit, isReplacement = false }) {
+function PlantationCard({ plantation, onSignal, onAudit, isReplacement = false, readOnly = false }) {
   const replaced = plantation.is_replaced;
   return (
     <div className={`rounded-xl border bg-white p-4 space-y-2 ${replaced ? "opacity-60" : ""}`}>
@@ -50,7 +53,7 @@ function PlantationCard({ plantation, onSignal, onAudit, isReplacement = false }
       </div>
 
       <div className="flex gap-2 pt-1">
-        {!replaced && !isReplacement && (
+        {!readOnly && !replaced && !isReplacement && (
           <button className="btn-secondary text-xs py-1 px-3 flex items-center gap-1 text-orange-600 border-orange-200 hover:bg-orange-50"
             onClick={() => onSignal(plantation)}>
             <AlertTriangle size={13} /> Introuvable
@@ -285,36 +288,44 @@ export default function TerrainPage() {
   const [loading, setLoading] = useState(true);
   const [signalTarget, setSignalTarget] = useState(null);
   const [auditTarget, setAuditTarget] = useState(null);
+  const [exporting, setExporting] = useState(false);
 
-  const binomeId = user?.binome_id;
+  const isBinome = user?.role === "binome";
+  const binomeId = isBinome ? user?.binome_id : null;
+  const teamId   = !isBinome ? user?.team_id : null;
 
   const loadData = useCallback(async () => {
-    if (!binomeId) return;
+    if (!binomeId && !teamId) return;
     setLoading(true);
     try {
-      const [p, r] = await Promise.all([
-        listBiномePlantations(binomeId),
-        listBinomeReplacements(binomeId),
-      ]);
-      setPlantations(p);
-      setReplacements(r);
+      if (binomeId) {
+        const [p, r] = await Promise.all([
+          listBiномePlantations(binomeId),
+          listBinomeReplacements(binomeId),
+        ]);
+        setPlantations(p);
+        setReplacements(r);
+      } else {
+        setPlantations(await listTeamPlantations(teamId));
+        setReplacements([]);
+      }
     } catch { /* erreur silencieuse */ }
     finally { setLoading(false); }
-  }, [binomeId]);
+  }, [binomeId, teamId]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
   // Plantations de remplacement enrichies
   const replacementPlantationIds = replacements.map(r => r.replacement_plantation_id);
 
-  if (!binomeId) {
+  if (!binomeId && !teamId) {
     return (
       <div className="min-h-screen bg-gray-50">
         <AppHeader />
         <div className="flex items-center justify-center py-24">
           <div className="text-center text-gray-500 space-y-2">
             <AlertTriangle size={36} className="mx-auto text-amber-400" />
-            <p className="font-medium">Votre compte n'est pas rattaché à un binôme.</p>
+            <p className="font-medium">Votre compte n'est rattaché à aucune équipe ni binôme.</p>
             <p className="text-sm">Contactez votre administrateur.</p>
           </div>
         </div>
@@ -332,12 +343,32 @@ export default function TerrainPage() {
             <div>
               <h2 className="text-xl font-semibold text-gray-900">Mes plantations</h2>
               <p className="text-sm text-gray-500 mt-1">
-                Plantations attribuées à votre binôme pour audit.
+                {isBinome
+                  ? "Plantations attribuées à votre binôme pour audit."
+                  : "Plantations reçues par votre équipe (brigades qui lui sont confiées)."}
               </p>
             </div>
-            <button className="btn-secondary text-sm" onClick={loadData}>
-              <RefreshCw size={14} /> Actualiser
-            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="btn-secondary text-sm"
+                disabled={exporting || plantations.length === 0}
+                onClick={async () => {
+                  setExporting(true);
+                  try {
+                    if (binomeId) await exportBinomePlantationsExcel(binomeId);
+                    else if (teamId) await exportTeamPlantationsExcel(teamId);
+                  }
+                  finally { setExporting(false); }
+                }}
+              >
+                {exporting ? <Spinner size={14} /> : <Download size={14} />}
+                Excel
+              </button>
+              <button type="button" className="btn-secondary text-sm" onClick={loadData}>
+                <RefreshCw size={14} /> Actualiser
+              </button>
+            </div>
           </div>
 
           {loading ? (
@@ -346,11 +377,14 @@ export default function TerrainPage() {
             <>
               {/* Plantations de l'échantillon */}
               {plantations.length === 0 ? (
-                <EmptyState message="Aucune plantation attribuée à votre binôme." />
+                <EmptyState message={isBinome
+                  ? "Aucune plantation attribuée à votre binôme."
+                  : "Aucune plantation reçue par votre équipe pour l'instant."} />
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {plantations.map(p => (
                     <PlantationCard key={p.id} plantation={p}
+                      readOnly={!isBinome}
                       onSignal={setSignalTarget}
                       onAudit={setAuditTarget} />
                   ))}
@@ -358,7 +392,7 @@ export default function TerrainPage() {
               )}
 
               {/* Plantations de remplacement sélectionnées */}
-              {replacements.length > 0 && (
+              {isBinome && replacements.length > 0 && (
                 <>
                   <h3 className="text-base font-semibold text-gray-700 pt-2">
                     Remplacements sélectionnés ({replacements.length})

@@ -63,6 +63,7 @@ export default function AuditSuperficiePage() {
   const [saveOpen, setSaveOpen]       = useState(false);
   const [saveTitle, setSaveTitle]     = useState("");
   const [saveSuccess, setSaveSuccess] = useState("");
+  const [saveDispatch, setSaveDispatch] = useState(null);
   const [error, setError]             = useState(null);
 
   const [brigadeSearch, setBrigadeSearch]       = useState("");
@@ -94,14 +95,20 @@ export default function AuditSuperficiePage() {
     setError(null);
     setSaveSuccess("");
     try {
-      await saveAuditSuggestion({
+      const saved = await saveAuditSuggestion({
         title: saveTitle.trim() || undefined,
         brigade_filter: hasFilter ? selectedBrigades : null,
         snapshot: result,
       });
       setSaveOpen(false);
       setSaveTitle("");
-      setSaveSuccess("Suggestion enregistrée. Retrouvez-la dans Fiches d'audit.");
+      setSaveDispatch(saved.dispatch || null);
+      const dispatched = saved.dispatch?.fiches_dispatched ?? 0;
+      setSaveSuccess(
+        dispatched > 0
+          ? `Suggestion enregistrée — ${dispatched} fiche(s) envoyée(s) aux équipes concernées (Mes plantations).`
+          : "Suggestion enregistrée. Aucune fiche distribuée : vérifiez les affectations brigade → équipe et les binômes.",
+      );
     } catch {
       setError("Impossible d'enregistrer la suggestion.");
     } finally {
@@ -212,11 +219,32 @@ export default function AuditSuperficiePage() {
             <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>
           )}
           {saveSuccess && (
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 flex flex-wrap items-center justify-between gap-2">
-              <span>{saveSuccess}</span>
-              <button type="button" className="text-emerald-800 underline text-xs" onClick={() => navigate("/fiches-audit")}>
-                Ouvrir Fiches d'audit
-              </button>
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span>{saveSuccess}</span>
+                <button type="button" className="text-emerald-900 underline text-xs" onClick={() => navigate("/fiches-audit")}>
+                  Ouvrir Fiches d'audit
+                </button>
+              </div>
+              {saveDispatch?.teams?.length > 0 && (
+                <ul className="text-xs text-emerald-700/90 list-disc pl-4">
+                  {saveDispatch.teams.map((t) => (
+                    <li key={t.team_id}>
+                      {t.team_name} — {t.fiches} fiche(s) · {t.binomes} binôme(s)
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {saveDispatch?.warnings?.length > 0 && (
+                <ul className="text-xs text-amber-800 list-disc pl-4 border-t border-emerald-200/80 pt-2">
+                  {saveDispatch.warnings.slice(0, 5).map((w, i) => (
+                    <li key={i}>{w}</li>
+                  ))}
+                  {saveDispatch.warnings.length > 5 && (
+                    <li>… et {saveDispatch.warnings.length - 5} autre(s) alerte(s)</li>
+                  )}
+                </ul>
+              )}
             </div>
           )}
 

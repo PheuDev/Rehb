@@ -183,6 +183,10 @@ CREATE TABLE IF NOT EXISTS plantations (
     created_at     TIMESTAMPTZ   DEFAULT NOW()
 );
 
+ALTER TABLE plantations ADD COLUMN IF NOT EXISTS source_rehabilitation_id INTEGER
+    REFERENCES rehabilitations (id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS ix_plantation_source_rehab ON plantations (source_rehabilitation_id);
+
 CREATE INDEX IF NOT EXISTS ix_plantation_brigade   ON plantations (brigade_id);
 CREATE INDEX IF NOT EXISTS ix_plantation_is_sample ON plantations (is_sample);
 CREATE INDEX IF NOT EXISTS ix_plantation_pda       ON plantations (pda_number);
@@ -344,6 +348,18 @@ CREATE TABLE IF NOT EXISTS saved_audit_suggestions (
 );
 CREATE INDEX IF NOT EXISTS ix_saved_audit_created_by ON saved_audit_suggestions (created_by_id);
 CREATE INDEX IF NOT EXISTS ix_saved_audit_created_at ON saved_audit_suggestions (created_at);
+
+CREATE TABLE IF NOT EXISTS team_audit_assignments (
+    id                    SERIAL PRIMARY KEY,
+    audit_suggestion_id   INTEGER NOT NULL REFERENCES saved_audit_suggestions (id) ON DELETE CASCADE,
+    team_id               INTEGER NOT NULL REFERENCES teams (id) ON DELETE CASCADE,
+    plantation_id         INTEGER NOT NULL REFERENCES plantations (id) ON DELETE CASCADE,
+    rehabilitation_id     INTEGER REFERENCES rehabilitations (id) ON DELETE SET NULL,
+    created_at            TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT uq_team_audit_plantation UNIQUE (team_id, plantation_id)
+);
+CREATE INDEX IF NOT EXISTS ix_team_audit_team ON team_audit_assignments (team_id);
+CREATE INDEX IF NOT EXISTS ix_team_audit_suggestion ON team_audit_assignments (audit_suggestion_id);
 
 -- =========================================================================
 -- Vue de synthèse (enrichie avec auteur)

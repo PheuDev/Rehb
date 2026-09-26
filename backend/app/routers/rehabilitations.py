@@ -501,7 +501,7 @@ def save_audit_suggestion(
         title = f"Suggestion du {datetime.now().strftime('%d/%m/%Y %H:%M')}"
 
     snapshot = payload.snapshot.model_dump(mode="json")
-    row = crud.create_saved_audit_suggestion(
+    row, dispatch = crud.create_saved_audit_suggestion(
         db,
         user=current_user,
         title=title,
@@ -509,7 +509,11 @@ def save_audit_suggestion(
         brigade_filter=payload.brigade_filter or None,
     )
     summary = _saved_audit_summary(row)
-    return {**summary, "snapshot": payload.snapshot}
+    return {
+        **summary,
+        "snapshot": payload.snapshot,
+        "dispatch": dispatch,
+    }
 
 
 @router.get("/audit-suggestions", response_model=schemas.SavedAuditSuggestionListResponse)

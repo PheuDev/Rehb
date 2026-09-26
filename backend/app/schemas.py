@@ -317,8 +317,26 @@ class SavedAuditSuggestionSummary(BaseModel):
     brigade_filter: Optional[List[str]] = None
 
 
+class AuditDispatchTeamSummary(BaseModel):
+    team_id: int
+    team_name: str
+    fiches: int
+    binomes: int
+
+
+class AuditDispatchResult(BaseModel):
+    fiches_total: int
+    fiches_dispatched: int
+    plantations_created: int
+    plantations_reused: int
+    binome_assignments_created: int
+    teams: List[AuditDispatchTeamSummary] = []
+    warnings: List[str] = []
+
+
 class SavedAuditSuggestionDetail(SavedAuditSuggestionSummary):
     snapshot: AuditSampleResponse
+    dispatch: Optional[AuditDispatchResult] = None
 
 
 class SavedAuditSuggestionListResponse(BaseModel):
