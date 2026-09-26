@@ -34,6 +34,7 @@ from app.models import (
     Plantation,
     ReplacementSelection,
     Rehabilitation,
+    SavedAuditSuggestion,
     SampleAssignment,
     Team,
     TeamAuditAssignment,
@@ -239,6 +240,21 @@ def _plantation_to_out(
         locked_by_name=locked_by_name,
         replacement_id=lock.id if lock else None,
     )
+
+
+def _latest_suggestion_fiche_ids(db: Session, key: str) -> set[int]:
+    suggestion = (
+        db.query(SavedAuditSuggestion)
+        .order_by(SavedAuditSuggestion.created_at.desc(), SavedAuditSuggestion.id.desc())
+        .first()
+    )
+    if suggestion is None:
+        return set()
+    return {
+        fiche["id"]
+        for fiche in ((suggestion.snapshot or {}).get(key) or [])
+        if fiche.get("id") is not None
+    }
 
 
 # =============================================================================
@@ -491,10 +507,20 @@ def list_hors_echantillon_plantations(
     if current_user.role != "admin" and not current_user.team_id:
         return []
 
+    # Le stock affiché est celui de la feuille hors-échantillon de la dernière
+    # suggestion sauvegardée. Les lignes Plantation fournissent les identifiants
+    # stables nécessaires aux actions de remplacement.
+    fiche_ids = _latest_suggestion_fiche_ids(db, "fiches_hors_echantillon")
+    if not fiche_ids:
+        return []
+
     if brigade_id is not None:
         _brigade_or_404(db, brigade_id)
 
-    query = db.query(Plantation).filter(Plantation.is_sample.is_(False))
+    query = db.query(Plantation).filter(
+        Plantation.is_sample.is_(False),
+        Plantation.source_rehabilitation_id.in_(fiche_ids),
+    )
     if current_user.role != "admin" and current_user.team_id:
         brigade_ids = (
             db.query(TeamBrigadeAssignment.brigade_id)
@@ -536,10 +562,18 @@ def list_echantillon_plantations(
     if current_user.role != "admin" and not current_user.team_id:
         return []
 
+    # Les candidates doivent venir de la même suggestion que son stock hors-échantillon.
+    fiche_ids = _latest_suggestion_fiche_ids(db, "fiches")
+    if not fiche_ids:
+        return []
+
     if brigade_id is not None:
         _brigade_or_404(db, brigade_id)
 
-    query = db.query(Plantation).filter(Plantation.is_sample.is_(True))
+    query = db.query(Plantation).filter(
+        Plantation.is_sample.is_(True),
+        Plantation.source_rehabilitation_id.in_(fiche_ids),
+    )
     if current_user.role != "admin" and current_user.team_id:
         brigade_ids = (
             db.query(TeamBrigadeAssignment.brigade_id)

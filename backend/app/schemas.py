@@ -331,6 +331,7 @@ class AuditDispatchResult(BaseModel):
     fiches_dispatched: int
     plantations_created: int
     plantations_reused: int
+    plantations_hors_echantillon_created: int = 0
     binome_assignments_created: int
     teams: List[AuditDispatchTeamSummary] = []
     warnings: List[str] = []

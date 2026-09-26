@@ -15,12 +15,14 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.database import Base
+from app.crud import _sync_hors_echantillon_plantations
 from app.dependencies import get_db, require_active, require_admin
 from app.models import (
     Binome,
     BrigadeEntity,
     Plantation,
     ReplacementSelection,
+    SavedAuditSuggestion,
     SampleAssignment,
     Team,
     TeamBrigadeAssignment,
@@ -78,13 +80,30 @@ def make_client_builder():
         db.add(TeamBrigadeAssignment(brigade_id=2, team_id=2))
 
         # Échantillonnées — brigade A
-        db.add(Plantation(id=1, pda_number="PDA-1", brigade_id=1, is_sample=True))
-        db.add(Plantation(id=2, pda_number="PDA-2", brigade_id=1, is_sample=True))
+        db.add(Plantation(id=1, pda_number="PDA-1", brigade_id=1, is_sample=True, source_rehabilitation_id=101))
+        db.add(Plantation(id=2, pda_number="PDA-2", brigade_id=1, is_sample=True, source_rehabilitation_id=102))
         # Hors-échantillon — brigade A (stock de remplacement)
-        db.add(Plantation(id=3, pda_number="PDA-3", brigade_id=1, is_sample=False))
-        db.add(Plantation(id=4, pda_number="PDA-4", brigade_id=1, is_sample=False))
+        db.add(Plantation(id=3, pda_number="PDA-3", brigade_id=1, is_sample=False, source_rehabilitation_id=103))
+        db.add(Plantation(id=4, pda_number="PDA-4", brigade_id=1, is_sample=False, source_rehabilitation_id=104))
         # Hors-échantillon — brigade B
-        db.add(Plantation(id=5, pda_number="PDA-5", brigade_id=2, is_sample=False))
+        db.add(Plantation(id=5, pda_number="PDA-5", brigade_id=2, is_sample=False, source_rehabilitation_id=105))
+
+        db.add(SavedAuditSuggestion(
+            id=1,
+            title="Suggestion initiale",
+            created_by_id=1,
+            snapshot={
+                "fiches": [
+                    {"id": 101, "pda_number": "PDA-1", "brigade_name": "Brigade A"},
+                    {"id": 102, "pda_number": "PDA-2", "brigade_name": "Brigade A"},
+                ],
+                "fiches_hors_echantillon": [
+                    {"id": 103, "pda_number": "PDA-3", "brigade_name": "Brigade A"},
+                    {"id": 104, "pda_number": "PDA-4", "brigade_name": "Brigade A"},
+                    {"id": 105, "pda_number": "PDA-5", "brigade_name": "Brigade B"},
+                ],
+            },
+        ))
 
         db.add(SampleAssignment(plantation_id=1, binome_id=1))
         db.add(SampleAssignment(plantation_id=2, binome_id=2))
@@ -149,6 +168,40 @@ def test_list_echantillon_excludes_already_replaced():
     response = client.get("/api/plantations/echantillon", params={"brigade_id": 1})
     assert response.status_code == 200
     assert {p["id"] for p in response.json()} == {2}
+
+
+def test_stock_uses_only_latest_saved_suggestion_sheet():
+    build, TestingSession = make_client_builder()
+    client = build(ADMIN)
+    with TestingSession() as db:
+        db.add(SavedAuditSuggestion(
+            id=2,
+            title="Suggestion récente",
+            created_by_id=1,
+            snapshot={
+                "fiches": [
+                    {"id": 102, "pda_number": "PDA-2", "brigade_name": "Brigade A"},
+                ],
+                "fiches_hors_echantillon": [
+                    {"id": 104, "pda_number": "PDA-4-latest", "producer_name": "Prod latest", "brigade_name": "Brigade A"},
+                ],
+            },
+        ))
+        _sync_hors_echantillon_plantations(db, [
+            {"id": 104, "pda_number": "PDA-4-latest", "producer_name": "Prod latest", "brigade_name": "Brigade A"},
+        ])
+        db.commit()
+
+    hors = client.get("/api/plantations/hors-echantillon", params={"brigade_id": 1})
+    sample = client.get("/api/plantations/echantillon", params={"brigade_id": 1})
+
+    assert hors.status_code == 200
+    assert [p["pda_number"] for p in hors.json()] == ["PDA-4-latest"]
+    assert hors.json()[0]["producer_name"] == "Prod latest"
+    assert sample.status_code == 200
+    assert [p["pda_number"] for p in sample.json()] == ["PDA-2"]
+
+
 def test_from_stock_grises_replacement_and_marks_sample_replaced():
     build, _ = make_client_builder()
     client = build(CHEF_A)

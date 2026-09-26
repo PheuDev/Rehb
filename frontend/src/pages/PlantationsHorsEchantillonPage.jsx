@@ -159,8 +159,8 @@ export default function PlantationsHorsEchantillonPage() {
             <div>
               <h2 className="text-xl font-semibold text-gray-900">Mes plantations hors échantillon</h2>
               <p className="text-sm text-gray-500 mt-1">
-                Stock de remplacement — marquez une plantation hors-échantillon comme utilisée
-                pour remplacer une plantation échantillonnée de la même brigade.
+                Fiches de la feuille hors-échantillon de la dernière suggestion enregistrée.
+                Marquez une fiche comme utilisée pour remplacer une fiche échantillonnée de la même brigade.
               </p>
             </div>
             <button type="button" className="btn-secondary text-sm" onClick={loadList}>

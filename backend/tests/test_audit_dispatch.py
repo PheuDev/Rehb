@@ -205,6 +205,12 @@ def make_multi_team_client():
                 superficie_rehabilitee=7, annee_rehabilitation=2023,
             )
         )
+        db.add(
+            Rehabilitation(
+                id=4, pda_number="PDA-4", brigade_name="Brigade Alpha",
+                superficie_rehabilitee=2, annee_rehabilitation=2022,
+            )
+        )
         db.commit()
 
     def override_get_db():
@@ -253,6 +259,37 @@ def test_save_audit_dispatches_multiple_brigades_to_teams():
         assert {p.brigade.name for p in plantations} == {
             "Brigade Alpha", "Brigade Beta", "Brigade Gamma",
         }
+
+
+def test_save_audit_materializes_hors_echantillon_sheet():
+    client, session_factory = make_multi_team_client()
+    snapshot = {
+        **MULTI_BRIGADE_SNAPSHOT,
+        "fiches_hors_echantillon": [
+            {
+                "id": 4, "pda_number": "PDA-4", "departement": "Atlantique",
+                "commune": "Calavi", "village": "Dassa", "brigade_name": "Brigade Alpha",
+                "producer_name": "Prod D", "superficie_rehabilitee": 2.0,
+            },
+        ],
+    }
+
+    response = client.post(
+        "/api/rehabilitations/audit-suggestions",
+        json={"title": "Suggestion avec hors-échantillon", "snapshot": snapshot},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["dispatch"]["plantations_hors_echantillon_created"] == 1
+    with session_factory() as db:
+        replacement = db.query(Plantation).filter(
+            Plantation.source_rehabilitation_id == 4,
+            Plantation.is_sample.is_(False),
+        ).one()
+        assert replacement.pda_number == "PDA-4"
+        assert replacement.producer_name == "Prod D"
+        assert replacement.superficie == 2.0
+        assert replacement.brigade.name == "Brigade Alpha"
 
 
 def test_save_audit_registers_fiche_for_team_without_binome():

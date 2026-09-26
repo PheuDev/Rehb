@@ -907,6 +907,94 @@ def _ensure_brigade_entities_from_names(db: Session, names: list[str]) -> None:
     db.flush()
 
 
+def _sync_hors_echantillon_plantations(db: Session, fiches: list[dict]) -> int:
+    """Matérialise les fiches hors-échantillon pour les actions terrain.
+
+    Les fiches restent définies par le snapshot de la suggestion. Les lignes
+    Plantation servent uniquement de cible stable aux remplacements.
+    """
+    brigade_names = [
+        (fiche.get("brigade_name") or "").strip()
+        for fiche in fiches
+        if (fiche.get("brigade_name") or "").strip()
+    ]
+    _ensure_brigade_entities_from_names(db, brigade_names)
+    brigades = {b.name.casefold(): b for b in db.query(BrigadeEntity).all()}
+
+    rehab_ids = {fiche.get("id") for fiche in fiches if fiche.get("id") is not None}
+    existing = {
+        (plantation.source_rehabilitation_id, plantation.brigade_id): plantation
+        for plantation in db.query(Plantation)
+        .filter(
+            Plantation.is_sample.is_(False),
+            Plantation.source_rehabilitation_id.in_(rehab_ids or {-1}),
+        )
+        .all()
+    }
+
+    created = 0
+    for fiche in fiches:
+        rehab_id = fiche.get("id")
+        brigade_name = (fiche.get("brigade_name") or "").strip()
+        brigade = brigades.get(brigade_name.casefold())
+        if rehab_id is None or brigade is None:
+            continue
+        key = (rehab_id, brigade.id)
+        plantation = existing.get(key)
+        if plantation:
+            plantation.pda_number = fiche.get("pda_number")
+            plantation.producer_name = fiche.get("producer_name")
+            plantation.departement = fiche.get("departement")
+            plantation.commune = fiche.get("commune")
+            plantation.arrondissement = fiche.get("arrondissement")
+            plantation.village = fiche.get("village")
+            plantation.superficie = fiche.get("superficie_rehabilitee")
+            continue
+        plantation = Plantation(
+            pda_number=fiche.get("pda_number"),
+            producer_name=fiche.get("producer_name"),
+            departement=fiche.get("departement"),
+            commune=fiche.get("commune"),
+            arrondissement=fiche.get("arrondissement"),
+            village=fiche.get("village"),
+            superficie=fiche.get("superficie_rehabilitee"),
+            brigade_id=brigade.id,
+            is_sample=False,
+            source_rehabilitation_id=rehab_id,
+        )
+        db.add(plantation)
+        existing[key] = plantation
+        created += 1
+    if created:
+        db.flush()
+    return created
+
+
+def sync_saved_hors_echantillon_plantations() -> int:
+    """Backfill les stocks hors-échantillon des suggestions déjà sauvegardées."""
+    from app.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        suggestions = db.query(SavedAuditSuggestion).order_by(
+            SavedAuditSuggestion.created_at.asc(), SavedAuditSuggestion.id.asc()
+        ).all()
+        total = sum(
+            _sync_hors_echantillon_plantations(
+                db,
+                (suggestion.snapshot or {}).get("fiches_hors_echantillon") or [],
+            )
+            for suggestion in suggestions
+        )
+        db.commit()
+        return total
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
 def dispatch_audit_suggestion_to_teams(
     db: Session,
     suggestion_id: int,
@@ -923,15 +1011,18 @@ def dispatch_audit_suggestion_to_teams(
         "teams": {},
         "warnings": [],
     }
-    if not fiches:
-        return {**stats, "teams": []}
-
     brigade_names = [
         (f.get("brigade_name") or "").strip()
-        for f in fiches
+        for f in [*fiches, *(snapshot.get("fiches_hors_echantillon") or [])]
         if (f.get("brigade_name") or "").strip()
     ]
     _ensure_brigade_entities_from_names(db, brigade_names)
+    stats["plantations_hors_echantillon_created"] = _sync_hors_echantillon_plantations(
+        db, snapshot.get("fiches_hors_echantillon") or []
+    )
+
+    if not fiches:
+        return {**stats, "teams": []}
 
     brigades = db.query(BrigadeEntity).all()
     brigade_by_name = {b.name: b for b in brigades}
@@ -977,7 +1068,10 @@ def dispatch_audit_suggestion_to_teams(
         if rehab_id:
             plantation = (
                 db.query(Plantation)
-                .filter(Plantation.source_rehabilitation_id == rehab_id)
+                .filter(
+                    Plantation.source_rehabilitation_id == rehab_id,
+                    Plantation.is_sample.is_(True),
+                )
                 .first()
             )
         if not plantation:
