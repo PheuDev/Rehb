@@ -488,6 +488,9 @@ def list_hors_echantillon_plantations(
     - Les plantations déjà marquées « utilisée » (grisées) apparaissent avec
       ``is_locked`` / ``locked_by_me`` / ``replacement_id``.
     """
+    if current_user.role != "admin" and not current_user.team_id:
+        return []
+
     if brigade_id is not None:
         _brigade_or_404(db, brigade_id)
 
@@ -530,6 +533,9 @@ def list_echantillon_plantations(
     Les plantations déjà « remplacées » sont exclues : une plantation
     échantillonnée ne peut être remplacée qu'UNE seule fois.
     """
+    if current_user.role != "admin" and not current_user.team_id:
+        return []
+
     if brigade_id is not None:
         _brigade_or_404(db, brigade_id)
 

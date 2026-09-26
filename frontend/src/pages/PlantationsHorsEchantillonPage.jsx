@@ -9,7 +9,7 @@
  *     réutilisable) et l'échantillonnée passe au statut « remplacée » dans
  *     Mes plantations.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   CheckCircle2, Lock, RefreshCw, Search,
 } from "lucide-react";
@@ -39,11 +39,22 @@ export default function PlantationsHorsEchantillonPage() {
   const [plantations, setPlantations]         = useState([]);
   const [loading, setLoading]                 = useState(false);
   const [saving, setSaving]                   = useState(false);
-  const [error, setError]                     = useState("");
+  const [listError, setListError]             = useState("");
+  const [actionError, setActionError]         = useState("");
 
   const [target, setTarget]                   = useState(null); // hors-échantillon à utiliser
   const [sampleOptions, setSampleOptions]     = useState([]);
+  const [samplesLoading, setSamplesLoading]   = useState(false);
   const [selectedOriginal, setSelectedOriginal] = useState(null);
+  const listRequestId = useRef(0);
+  const samplesRequestId = useRef(0);
+
+  const getRequestError = (err, fallback) => {
+    const detail = err?.response?.data?.detail;
+    if (typeof detail === "string" && detail.trim()) return detail;
+    if (!err?.response) return "Le serveur est injoignable. Vérifiez votre connexion puis réessayez.";
+    return fallback;
+  };
 
   const normalizedBrigades = brigades.map((b) => ({
     id: b.brigade_id ?? b.id,
@@ -62,46 +73,63 @@ export default function PlantationsHorsEchantillonPage() {
   }, [isAdmin, user?.team_id]);
 
   const loadList = useCallback(async () => {
+    const requestId = ++listRequestId.current;
     setLoading(true);
-    setError("");
+    setListError("");
     try {
       const params = {
         ...(selectedBrigadeId ? { brigade_id: selectedBrigadeId } : {}),
         ...(search ? { q: search } : {}),
       };
-      setPlantations(await listHorsEchantillonPlantations(params));
-    } catch {
-      setError("Impossible de charger les plantations hors-échantillon.");
+      const result = await listHorsEchantillonPlantations(params);
+      if (requestId === listRequestId.current) setPlantations(result);
+    } catch (err) {
+      if (requestId === listRequestId.current) {
+        setListError(getRequestError(err, "Impossible de charger les plantations hors-échantillon."));
+      }
     } finally {
-      setLoading(false);
+      if (requestId === listRequestId.current) setLoading(false);
     }
   }, [selectedBrigadeId, search]);
 
   useEffect(() => { loadBrigades(); }, [loadBrigades]);
   useEffect(() => { loadList(); }, [loadList]);
+
+  function closeUseModal() {
+    samplesRequestId.current += 1;
+    setSamplesLoading(false);
+    setTarget(null);
+  }
+
   async function openUseModal(plantation) {
+    const requestId = ++samplesRequestId.current;
     setTarget(plantation);
     setSelectedOriginal(null);
     setSampleOptions([]);
-    setError("");
+    setActionError("");
+    setSamplesLoading(true);
     try {
       const sample = await listEchantillonPlantations({ brigade_id: plantation.brigade_id });
-      setSampleOptions(sample);
-    } catch {
-      setError("Impossible de charger les plantations échantillonnées de cette brigade.");
+      if (requestId === samplesRequestId.current) setSampleOptions(sample);
+    } catch (err) {
+      if (requestId === samplesRequestId.current) {
+        setActionError(getRequestError(err, "Impossible de charger les plantations échantillonnées de cette brigade."));
+      }
+    } finally {
+      if (requestId === samplesRequestId.current) setSamplesLoading(false);
     }
   }
 
   async function handleConfirmReplacement() {
     if (!target || !selectedOriginal) return;
     setSaving(true);
-    setError("");
+    setActionError("");
     try {
       await createStockReplacement(target.id, selectedOriginal.id);
-      setTarget(null);
+      closeUseModal();
       await loadList();
     } catch (err) {
-      setError(err?.response?.data?.detail || "Erreur lors du marquage.");
+      setActionError(getRequestError(err, "Erreur lors du marquage."));
     } finally {
       setSaving(false);
     }
@@ -110,12 +138,12 @@ export default function PlantationsHorsEchantillonPage() {
   async function handleUnlock(plantation) {
     if (!plantation.replacement_id) return;
     setSaving(true);
-    setError("");
+    setActionError("");
     try {
       await deleteReplacement(plantation.replacement_id);
       await loadList();
     } catch (err) {
-      setError(err?.response?.data?.detail || "Erreur lors du dégrisage.");
+      setActionError(getRequestError(err, "Erreur lors du dégrisage."));
     } finally {
       setSaving(false);
     }
@@ -169,13 +197,13 @@ export default function PlantationsHorsEchantillonPage() {
             )}
           </div>
 
-          {error && (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>
+          {listError && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">{listError}</div>
           )}
 
           {loading ? (
             <div className="flex justify-center py-16"><Spinner size={32} /></div>
-          ) : plantations.length === 0 ? (
+          ) : listError ? null : plantations.length === 0 ? (
             <EmptyState message="Aucune plantation hors-échantillon pour cette brigade." />
           ) : (
             <div className="overflow-x-auto rounded-xl border bg-white">
@@ -263,7 +291,7 @@ export default function PlantationsHorsEchantillonPage() {
       {/* Modal : choisir la plantation échantillonnée à remplacer */}
       <Modal
         open={!!target}
-        onClose={() => !saving && setTarget(null)}
+        onClose={() => !saving && closeUseModal()}
         title="Marquer comme utilisée"
       >
         <div className="space-y-4">
@@ -275,7 +303,9 @@ export default function PlantationsHorsEchantillonPage() {
             </p>
           )}
 
-          {sampleOptions.length === 0 ? (
+          {samplesLoading ? (
+            <div className="flex justify-center py-8"><Spinner size={24} /></div>
+          ) : sampleOptions.length === 0 ? (
             <EmptyState message="Aucune plantation échantillonnée disponible dans cette brigade (toutes déjà remplacées ?)." />
           ) : (
             <div className="max-h-80 space-y-2 overflow-y-auto">
@@ -308,12 +338,12 @@ export default function PlantationsHorsEchantillonPage() {
             </div>
           )}
 
-          {error && (
-            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
+          {actionError && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{actionError}</p>
           )}
 
           <div className="flex justify-end gap-2">
-            <button type="button" className="btn-secondary" disabled={saving} onClick={() => setTarget(null)}>
+            <button type="button" className="btn-secondary" disabled={saving} onClick={closeUseModal}>
               Annuler
             </button>
             <button

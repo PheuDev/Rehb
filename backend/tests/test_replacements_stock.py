@@ -46,6 +46,12 @@ BINOME_A = User(
 )
 
 
+CHEF_WITHOUT_TEAM = User(
+    id=5, username="chef_sans_equipe", full_name="Chef sans equipe",
+    role="chef_equipe", is_active=True, hashed_password="x",
+)
+
+
 def make_client_builder():
     engine = create_engine(
         "sqlite://",
@@ -114,6 +120,18 @@ def test_list_hors_echantillon_scoped_to_brigade():
     assert ids == {3, 4}
     assert all(p["is_sample"] is False for p in items)
     assert all(p["is_locked"] is False for p in items)
+
+
+def test_unassigned_user_cannot_list_plantations_from_all_teams():
+    client = make_client_builder()[0](CHEF_WITHOUT_TEAM)
+
+    hors = client.get("/api/plantations/hors-echantillon")
+    sample = client.get("/api/plantations/echantillon")
+
+    assert hors.status_code == 200
+    assert hors.json() == []
+    assert sample.status_code == 200
+    assert sample.json() == []
 
 
 def test_list_echantillon_excludes_already_replaced():
