@@ -12,9 +12,13 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.database import Base
-from app.dependencies import get_db
-from app.models import Rehabilitation
+from app.dependencies import get_db, require_active
+from app.models import Rehabilitation, User
 from app.routers import rehabilitations
+
+# Compte administrateur factice : les routes exigent désormais un utilisateur
+# authentifié, et un admin voit l'intégralité des fiches (aucune restriction).
+ADMIN = User(id=1, username="admin", role="admin", is_active=True)
 
 BASE_ROW = dict(
     pda_number="PDA-TEST",
@@ -47,6 +51,7 @@ def make_client():
     app = FastAPI()
     app.include_router(rehabilitations.router)
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[require_active] = lambda: ADMIN
     return TestClient(app), TestingSession
 
 

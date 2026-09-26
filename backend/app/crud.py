@@ -4,7 +4,7 @@ from typing import Optional
 from sqlalchemy import or_, func, asc, desc
 from sqlalchemy.orm import Session
 
-from app.models import Rehabilitation
+from app.models import BrigadeEntity, Rehabilitation, TeamBrigadeAssignment, User
 from app.schemas import RehabilitationCreate, RehabilitationUpdate
 from app.completion import incomplete_condition
 
@@ -35,6 +35,17 @@ SUP_CLASSES = [
 ]
 
 
+def _brigade_scope_condition(brigade_names: list[str]):
+    """Condition SQL de restriction par brigade.
+
+    Les noms de brigade proviennent d'imports Excel : on compare sans tenir
+    compte des espaces superflus ni de la casse, sinon une équipe pourrait ne
+    voir aucune fiche à cause d'un simple espace en trop.
+    """
+    normalized = [name.strip().lower() for name in brigade_names if name and name.strip()]
+    return func.lower(func.trim(Rehabilitation.brigade_name)).in_(normalized)
+
+
 def _apply_filters(
     query,
     q: Optional[str] = None,
@@ -45,7 +56,17 @@ def _apply_filters(
     brigade_name: Optional[str] = None,
     annee: Optional[int] = None,
     sup_class: Optional[str] = None,
+    brigade_names: Optional[list[str]] = None,
 ):
+    """Applique les filtres utilisateur à une requête sur les fiches.
+
+    ``brigade_names`` porte la restriction de visibilité :
+      - ``None``      → aucune restriction (administrateur) ;
+      - ``[]``        → aucune brigade autorisée (donc aucun résultat) ;
+      - ``["A", "B"]``→ seules les fiches de ces brigades sont visibles.
+    """
+    if brigade_names is not None:
+        query = query.filter(_brigade_scope_condition(brigade_names))
     if q:
         like = f"%{q}%"
         query = query.filter(
@@ -77,6 +98,52 @@ def _apply_filters(
     return query
 
 
+# ---------------------------------------------------------------------------
+# Visibilité : administrateur = toutes les fiches ; équipe = uniquement les
+# fiches des brigades qui lui sont affectées (table team_brigade_assignments).
+# ---------------------------------------------------------------------------
+
+def get_team_brigade_names(db: Session, team_id: int) -> list[str]:
+    """Noms des brigades affectées à une équipe (comparables à brigade_name)."""
+    rows = (
+        db.query(BrigadeEntity.name)
+        .join(
+            TeamBrigadeAssignment,
+            TeamBrigadeAssignment.brigade_id == BrigadeEntity.id,
+        )
+        .filter(TeamBrigadeAssignment.team_id == team_id)
+        .all()
+    )
+    return [row[0] for row in rows if row[0]]
+
+
+def get_visible_brigade_names(db: Session, user: Optional[User]) -> Optional[list[str]]:
+    """Périmètre de visibilité des fiches pour un utilisateur.
+
+    - ``None`` → aucune restriction (administrateur : voit toutes les fiches) ;
+    - ``[]``   → aucune brigade affectée à l'équipe (donc aucune fiche visible) ;
+    - liste   → noms des brigades affectées à l'équipe de l'utilisateur.
+    """
+    if user is None or user.role == "admin":
+        return None
+    if not user.team_id:
+        return []
+    return get_team_brigade_names(db, user.team_id)
+
+
+def is_fiche_visible(
+    db: Session, user: Optional[User], brigade_name: Optional[str]
+) -> bool:
+    """Indique si une fiche (via son nom de brigade) est visible par l'utilisateur."""
+    allowed = get_visible_brigade_names(db, user)
+    if allowed is None:
+        return True
+    if not brigade_name:
+        return False
+    # Même normalisation que _brigade_scope_condition (espaces / casse)
+    return brigade_name.strip().lower() in {name.strip().lower() for name in allowed}
+
+
 def get_list(
     db: Session,
     q: Optional[str] = None,
@@ -91,10 +158,12 @@ def get_list(
     limit: int = 10,
     sort_by: str = "created_at",
     sort_order: str = "desc",
+    brigade_names: Optional[list[str]] = None,
 ):
     base_query = _apply_filters(
         db.query(Rehabilitation),
         q, departement, commune, arrondissement, village, brigade_name, annee, sup_class,
+        brigade_names=brigade_names,
     )
 
     total = base_query.count()
@@ -103,6 +172,7 @@ def get_list(
         _apply_filters(
             db.query(func.coalesce(func.sum(Rehabilitation.superficie_rehabilitee), 0)),
             q, departement, commune, arrondissement, village, brigade_name, annee, sup_class,
+            brigade_names=brigade_names,
         ).scalar()
         or Decimal(0)
     )
@@ -146,11 +216,13 @@ def get_incomplete_list(
     limit: int = 10,
     sort_by: str = "created_at",
     sort_order: str = "desc",
+    brigade_names: Optional[list[str]] = None,
 ):
     """Liste paginée des fiches ayant au moins une donnée métier manquante."""
     base_query = _apply_filters(
         db.query(Rehabilitation),
         q, departement, commune, arrondissement, village, brigade_name, annee, sup_class,
+        brigade_names=brigade_names,
     ).filter(incomplete_condition())
     total = base_query.count()
     sort_column = SORTABLE_COLUMNS.get(sort_by, Rehabilitation.created_at)
@@ -226,10 +298,16 @@ def clear_all(db: Session) -> int:
     return deleted
 
 
-def get_filters(db: Session):
+def get_filters(db: Session, brigade_names: Optional[list[str]] = None):
+    """Valeurs distinctes des listes déroulantes (restreintes au périmètre)."""
+    def scoped(query):
+        if brigade_names is not None:
+            query = query.filter(_brigade_scope_condition(brigade_names))
+        return query
+
     def distinct_values(column):
         rows = (
-            db.query(column)
+            scoped(db.query(column))
             .filter(column.isnot(None), column != "")
             .distinct()
             .order_by(column)
@@ -239,7 +317,7 @@ def get_filters(db: Session):
 
     annees = [
         r[0]
-        for r in db.query(Rehabilitation.annee_rehabilitation)
+        for r in scoped(db.query(Rehabilitation.annee_rehabilitation))
         .filter(Rehabilitation.annee_rehabilitation.isnot(None))
         .distinct()
         .order_by(Rehabilitation.annee_rehabilitation.desc())
@@ -257,7 +335,7 @@ def get_filters(db: Session):
     }
 
 
-def get_brigades(db: Session) -> list[dict]:
+def get_brigades(db: Session, brigade_names: Optional[list[str]] = None) -> list[dict]:
     """Liste des brigades disponibles, regroupées par nom.
 
     Pour des raisons historiques de conflit, une même brigade peut être
@@ -265,20 +343,25 @@ def get_brigades(db: Session) -> list[dict]:
     différentes). Regrouper par ``brigade_name`` garantit qu'un nom ne
     s'affiche qu'une seule fois, accompagné de son nombre de fiches.
     """
+    query = db.query(
+        Rehabilitation.brigade_name,
+        func.count(Rehabilitation.id),
+    ).filter(Rehabilitation.brigade_name.isnot(None), Rehabilitation.brigade_name != "")
+    if brigade_names is not None:
+        query = query.filter(_brigade_scope_condition(brigade_names))
     rows = (
-        db.query(
-            Rehabilitation.brigade_name,
-            func.count(Rehabilitation.id),
-        )
-        .filter(Rehabilitation.brigade_name.isnot(None), Rehabilitation.brigade_name != "")
-        .group_by(Rehabilitation.brigade_name)
+        query.group_by(Rehabilitation.brigade_name)
         .order_by(func.lower(Rehabilitation.brigade_name))
         .all()
     )
     return [{"name": name, "fiches": count} for name, count in rows]
 
 
-def get_brigades_detail(db: Session, q: Optional[str] = None) -> dict:
+def get_brigades_detail(
+    db: Session,
+    q: Optional[str] = None,
+    brigade_names: Optional[list[str]] = None,
+) -> dict:
     """Liste détaillée des brigades avec toutes les informations agrégées.
 
     Pour chaque brigade : nom, responsable (nom + téléphone), nombre de fiches,
@@ -288,6 +371,8 @@ def get_brigades_detail(db: Session, q: Optional[str] = None) -> dict:
         Rehabilitation.brigade_name.isnot(None),
         Rehabilitation.brigade_name != "",
     )
+    if brigade_names is not None:
+        query = query.filter(_brigade_scope_condition(brigade_names))
     if q:
         like = f"%{q}%"
         query = query.filter(
@@ -382,7 +467,9 @@ def _audit_class(superficie: float) -> str:
     return "S > 30 ha"
 
 
-def get_audit_sample(db: Session) -> dict:
+def get_audit_sample(
+    db: Session, brigade_names: Optional[list[str]] = None
+) -> dict:
     """Génère un plan d'échantillonnage aléatoire pour l'audit des superficies.
 
     Contraintes :
@@ -393,14 +480,13 @@ def get_audit_sample(db: Session) -> dict:
     import random
     import math
 
-    rows = (
-        db.query(Rehabilitation)
-        .filter(
-            Rehabilitation.superficie_rehabilitee.isnot(None),
-            Rehabilitation.superficie_rehabilitee > 0,
-        )
-        .all()
+    query = db.query(Rehabilitation).filter(
+        Rehabilitation.superficie_rehabilitee.isnot(None),
+        Rehabilitation.superficie_rehabilitee > 0,
     )
+    if brigade_names is not None:
+        query = query.filter(_brigade_scope_condition(brigade_names))
+    rows = query.all()
 
     if not rows:
         return {
@@ -508,12 +594,18 @@ def get_audit_sample(db: Session) -> dict:
     }
 
 
-def get_departements(db: Session, q: Optional[str] = None) -> dict:
+def get_departements(
+    db: Session,
+    q: Optional[str] = None,
+    brigade_names: Optional[list[str]] = None,
+) -> dict:
     """Liste des départements avec agrégats : fiches, superficie, communes, villages, brigades, années."""
     query = db.query(Rehabilitation).filter(
         Rehabilitation.departement.isnot(None),
         Rehabilitation.departement != "",
     )
+    if brigade_names is not None:
+        query = query.filter(_brigade_scope_condition(brigade_names))
     if q:
         like = f"%{q}%"
         query = query.filter(Rehabilitation.departement.ilike(like))
@@ -567,7 +659,11 @@ def get_departements(db: Session, q: Optional[str] = None) -> dict:
     return {"items": items, "total": len(items)}
 
 
-def get_producers(db: Session, q: Optional[str] = None) -> dict:
+def get_producers(
+    db: Session,
+    q: Optional[str] = None,
+    brigade_names: Optional[list[str]] = None,
+) -> dict:
     """Liste des producteurs distincts, regroupés par nom.
 
     Chaque entrée contient le téléphone, le nombre de fiches, la superficie
@@ -584,6 +680,8 @@ def get_producers(db: Session, q: Optional[str] = None) -> dict:
         )
     )
 
+    if brigade_names is not None:
+        query = query.filter(_brigade_scope_condition(brigade_names))
     if q:
         like = f"%{q}%"
         query = query.filter(
@@ -636,16 +734,28 @@ def get_producers(db: Session, q: Optional[str] = None) -> dict:
     return {"items": items, "total": len(items)}
 
 
-def get_stats(db: Session):
-    total_fiches = db.query(func.count(Rehabilitation.id)).scalar() or 0
+def get_stats(db: Session, brigade_names: Optional[list[str]] = None):
+    """Statistiques globales, restreintes au périmètre de brigades autorisé."""
+    def scoped(query):
+        if brigade_names is not None:
+            query = query.filter(_brigade_scope_condition(brigade_names))
+        return query
+
+    total_fiches = scoped(db.query(func.count(Rehabilitation.id))).scalar() or 0
     superficie_totale = float(
-        db.query(func.coalesce(func.sum(Rehabilitation.superficie_rehabilitee), 0)).scalar() or 0
+        scoped(db.query(func.coalesce(func.sum(Rehabilitation.superficie_rehabilitee), 0))).scalar() or 0
     )
-    total_departements = db.query(func.count(func.distinct(Rehabilitation.departement))).scalar() or 0
-    total_communes = db.query(func.count(func.distinct(Rehabilitation.commune))).scalar() or 0
-    total_villages = db.query(func.count(func.distinct(Rehabilitation.village))).scalar() or 0
+    total_departements = scoped(
+        db.query(func.count(func.distinct(Rehabilitation.departement)))
+    ).scalar() or 0
+    total_communes = scoped(
+        db.query(func.count(func.distinct(Rehabilitation.commune)))
+    ).scalar() or 0
+    total_villages = scoped(
+        db.query(func.count(func.distinct(Rehabilitation.village)))
+    ).scalar() or 0
     total_brigades = (
-        db.query(func.count(func.distinct(Rehabilitation.brigade_name)))
+        scoped(db.query(func.count(func.distinct(Rehabilitation.brigade_name))))
         .filter(Rehabilitation.brigade_name.isnot(None), Rehabilitation.brigade_name != "")
         .scalar()
         or 0
@@ -653,7 +763,7 @@ def get_stats(db: Session):
 
     par_departement = [
         {"departement": row[0], "fiches": row[1], "superficie": float(row[2] or 0)}
-        for row in (
+        for row in scoped(
             db.query(
                 Rehabilitation.departement,
                 func.count(Rehabilitation.id),
@@ -661,13 +771,12 @@ def get_stats(db: Session):
             )
             .group_by(Rehabilitation.departement)
             .order_by(Rehabilitation.departement)
-            .all()
-        )
+        ).all()
     ]
 
     par_annee = [
         {"annee": row[0], "fiches": row[1], "superficie": float(row[2] or 0)}
-        for row in (
+        for row in scoped(
             db.query(
                 Rehabilitation.annee_rehabilitation,
                 func.count(Rehabilitation.id),
@@ -675,26 +784,24 @@ def get_stats(db: Session):
             )
             .group_by(Rehabilitation.annee_rehabilitation)
             .order_by(Rehabilitation.annee_rehabilitation)
-            .all()
-        )
+        ).all()
     ]
 
     par_sup_class = [
         {"supClass": row[0], "fiches": row[1], "superficie": float(row[2] or 0)}
-        for row in (
+        for row in scoped(
             db.query(
                 Rehabilitation.sup_class,
                 func.count(Rehabilitation.id),
                 func.sum(Rehabilitation.superficie_rehabilitee),
             )
             .group_by(Rehabilitation.sup_class)
-            .all()
-        )
+        ).all()
     ]
 
     par_brigade = [
         {"brigade": row[0], "fiches": row[1], "superficie": float(row[2] or 0)}
-        for row in (
+        for row in scoped(
             db.query(
                 Rehabilitation.brigade_name,
                 func.count(Rehabilitation.id),
@@ -706,8 +813,7 @@ def get_stats(db: Session):
             )
             .group_by(Rehabilitation.brigade_name)
             .order_by(func.count(Rehabilitation.id).desc())
-            .all()
-        )
+        ).all()
     ]
 
     return {
@@ -734,10 +840,12 @@ def get_all_for_export(
     brigade_name: Optional[str] = None,
     annee: Optional[int] = None,
     sup_class: Optional[str] = None,
+    brigade_names: Optional[list[str]] = None,
 ):
     query = _apply_filters(
         db.query(Rehabilitation),
         q, departement, commune, arrondissement, village, brigade_name, annee, sup_class,
+        brigade_names=brigade_names,
     )
     return query.order_by(Rehabilitation.id).all()
 
@@ -752,8 +860,10 @@ def get_all_incomplete_for_export(
     brigade_name: Optional[str] = None,
     annee: Optional[int] = None,
     sup_class: Optional[str] = None,
+    brigade_names: Optional[list[str]] = None,
 ):
     return _apply_filters(
         db.query(Rehabilitation),
         q, departement, commune, arrondissement, village, brigade_name, annee, sup_class,
+        brigade_names=brigade_names,
     ).filter(incomplete_condition()).order_by(Rehabilitation.id).all()

@@ -28,6 +28,15 @@ def _workbook_response(workbook, filename: str) -> StreamingResponse:
     )
 
 
+def _scope(db: Session, user: User) -> Optional[list[str]]:
+    """Périmètre de visibilité des fiches pour l'utilisateur courant.
+
+    - ``None`` → administrateur : toutes les fiches ;
+    - liste    → fiches des brigades affectées à l'équipe de l'utilisateur.
+    """
+    return crud.get_visible_brigade_names(db, user)
+
+
 # ---------------------------------------------------------------------------
 # Liste paginée avec recherche / filtres / tri
 # ---------------------------------------------------------------------------
@@ -67,6 +76,7 @@ def list_rehabilitations(
         limit=limit,
         sort_by=sortBy,
         sort_order=sortOrder,
+        brigade_names=_scope(db, current_user),
     )
     return {"items": items, "pagination": pagination}
 
@@ -97,6 +107,7 @@ def list_incomplete_rehabilitations(
     items, pagination = crud.get_incomplete_list(
         db, q, departement, commune, arrondissement, village, brigade_name,
         annee, sup_class, page, limit, sortBy, sortOrder,
+        brigade_names=_scope(db, current_user),
     )
     response_items = []
     for item in items:
@@ -114,7 +125,8 @@ def get_filters(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_active),
 ):
-    return crud.get_filters(db)
+    """Valeurs distinctes pour les listes déroulantes (limitées au périmètre)."""
+    return crud.get_filters(db, brigade_names=_scope(db, current_user))
 
 
 # ---------------------------------------------------------------------------
@@ -126,8 +138,8 @@ def list_brigades(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_active),
 ):
-    """Brigades distinctes regroupées par nom."""
-    return crud.get_brigades(db)
+    """Brigades distinctes regroupées par nom (limitées au périmètre)."""
+    return crud.get_brigades(db, brigade_names=_scope(db, current_user))
 
 
 @router.get("/brigades-detail", response_model=schemas.BrigadeDetailListResponse)
@@ -137,7 +149,7 @@ def list_brigades_detail(
     current_user: User = Depends(require_active),
 ):
     """Brigades avec toutes les informations agrégées (responsable, superficie, communes…)."""
-    return crud.get_brigades_detail(db, q=q)
+    return crud.get_brigades_detail(db, q=q, brigade_names=_scope(db, current_user))
 
 
 @router.get("/brigades-detail/export-excel")
@@ -151,7 +163,7 @@ def export_brigades_excel(
     from openpyxl.styles import Alignment, Font, PatternFill
     from openpyxl.utils import get_column_letter
 
-    data = crud.get_brigades_detail(db, q=q)
+    data = crud.get_brigades_detail(db, q=q, brigade_names=_scope(db, current_user))
     items = data["items"]
 
     HEADER_FILL = PatternFill(start_color="2D6846", end_color="2D6846", fill_type="solid")
@@ -209,7 +221,7 @@ def export_departements_excel(
     from openpyxl.styles import Alignment, Font, PatternFill
     from openpyxl.utils import get_column_letter
 
-    data = crud.get_departements(db, q=q)
+    data = crud.get_departements(db, q=q, brigade_names=_scope(db, current_user))
     items = data["items"]
 
     HEADER_FILL = PatternFill(start_color="B45309", end_color="B45309", fill_type="solid")
@@ -264,7 +276,7 @@ def export_producteurs_excel(
     from openpyxl.styles import Alignment, Font, PatternFill
     from openpyxl.utils import get_column_letter
 
-    data = crud.get_producers(db, q=q)
+    data = crud.get_producers(db, q=q, brigade_names=_scope(db, current_user))
     items = data["items"]
 
     HEADER_FILL = PatternFill(start_color="065F46", end_color="065F46", fill_type="solid")
@@ -315,7 +327,7 @@ def get_audit_sample(
     current_user: User = Depends(require_active),
 ):
     """Génère un plan d'échantillonnage aléatoire pour l'audit des superficies."""
-    result = crud.get_audit_sample(db)
+    result = crud.get_audit_sample(db, brigade_names=_scope(db, current_user))
 
     # Enrichir chaque fiche avec sa classe d'audit
     fiches_out = []
@@ -357,7 +369,7 @@ def export_audit_excel(
     from openpyxl.styles import Alignment, Font, PatternFill, Side, Border
     from openpyxl.utils import get_column_letter
 
-    result = crud.get_audit_sample(db)
+    result = crud.get_audit_sample(db, brigade_names=_scope(db, current_user))
 
     # Filtrer par brigades sélectionnées si demandé
     brigade_filter = [b.strip() for b in brigades.split(",")] if brigades else None
@@ -477,7 +489,7 @@ def list_departements(
     current_user: User = Depends(require_active),
 ):
     """Départements distincts avec leurs agrégats (fiches, superficie, communes…)."""
-    return crud.get_departements(db, q=q)
+    return crud.get_departements(db, q=q, brigade_names=_scope(db, current_user))
 
 
 # ---------------------------------------------------------------------------
@@ -490,7 +502,7 @@ def list_producers(
     current_user: User = Depends(require_active),
 ):
     """Producteurs distincts avec leurs informations agrégées (fiches, superficie, communes…)."""
-    return crud.get_producers(db, q=q)
+    return crud.get_producers(db, q=q, brigade_names=_scope(db, current_user))
 
 
 # ---------------------------------------------------------------------------
@@ -501,7 +513,8 @@ def get_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_active),
 ):
-    return crud.get_stats(db)
+    """Statistiques (périmètre complet pour un admin, équipe pour les autres)."""
+    return crud.get_stats(db, brigade_names=_scope(db, current_user))
 # ---------------------------------------------------------------------------
 # Export CSV (respecte les filtres actifs)
 # ---------------------------------------------------------------------------
@@ -519,7 +532,8 @@ def export_csv(
     current_user: User = Depends(require_active),
 ):
     rows = crud.get_all_for_export(
-        db, q, departement, commune, arrondissement, village, brigade_name, annee, sup_class
+        db, q, departement, commune, arrondissement, village, brigade_name, annee, sup_class,
+        brigade_names=_scope(db, current_user),
     )
 
     buffer = io.StringIO()
@@ -586,7 +600,8 @@ def export_excel(
     current_user: User = Depends(require_active),
 ):
     rows = crud.get_all_for_export(
-        db, q, departement, commune, arrondissement, village, brigade_name, annee, sup_class
+        db, q, departement, commune, arrondissement, village, brigade_name, annee, sup_class,
+        brigade_names=_scope(db, current_user),
     )
     workbook = excel_utils.build_export_workbook(rows)
     return _workbook_response(workbook, "rehabilitations.xlsx")
@@ -606,7 +621,8 @@ def export_incomplete_excel(
     current_user: User = Depends(require_active),
 ):
     rows = crud.get_all_incomplete_for_export(
-        db, q, departement, commune, arrondissement, village, brigade_name, annee, sup_class
+        db, q, departement, commune, arrondissement, village, brigade_name, annee, sup_class,
+        brigade_names=_scope(db, current_user),
     )
     workbook = excel_utils.build_incomplete_export_workbook(rows)
     return _workbook_response(workbook, "fiches_a_completer.xlsx")
@@ -660,6 +676,12 @@ def get_rehabilitation(
     obj = crud.get_by_id(db, rehab_id)
     if not obj:
         raise HTTPException(status_code=404, detail="Fiche de réhabilitation introuvable.")
+    # Un non-admin ne peut consulter que les fiches de son périmètre
+    if not crud.is_fiche_visible(db, current_user, obj.brigade_name):
+        raise HTTPException(
+            status_code=403,
+            detail="Cette fiche n'appartient pas aux brigades de votre équipe.",
+        )
     return obj
 
 

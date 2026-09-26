@@ -98,14 +98,16 @@ function TeamsSection() {
     const name = newBinomeName[teamId]?.trim();
     if (!name) return;
     await createBinome(teamId, name);
+    const refreshed = await listBinomes(teamId);
     setNewBinomeName(p => ({ ...p, [teamId]: "" }));
-    setBinomesMap(p => ({ ...p, [teamId]: await listBinomes(teamId) }));
+    setBinomesMap(p => ({ ...p, [teamId]: refreshed }));
   }
 
   async function handleDeleteBinome(teamId, binomeId) {
     if (!confirm("Supprimer ce binôme ?")) return;
     await deleteBinome(binomeId);
-    setBinomesMap(p => ({ ...p, [teamId]: await listBinomes(teamId) }));
+    const refreshed = await listBinomes(teamId);
+    setBinomesMap(p => ({ ...p, [teamId]: refreshed }));
   }
 
   if (loading) return <div className="flex justify-center py-12"><Spinner /></div>;
