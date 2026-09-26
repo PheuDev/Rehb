@@ -105,15 +105,18 @@ export async function getDepartements(params) {
   return data;
 }
 
-export async function getAuditSample() {
-  const { data } = await client.get("/rehabilitations/audit-sample");
+export async function getAuditSample(params = {}) {
+  const { data } = await client.get("/rehabilitations/audit-sample", { params });
   return data;
 }
 
-export async function exportAuditExcel(brigades = null) {
-  const params = brigades && brigades.length > 0 ? { brigades: brigades.join(",") } : {};
+export async function exportAuditExcel(brigades = null, params = {}) {
+  const p = {
+    ...(brigades && brigades.length > 0 ? { brigades: brigades.join(",") } : {}),
+    ...params,
+  };
   const response = await client.get("/rehabilitations/audit-sample/export-excel", {
-    params,
+    params: p,
     responseType: "blob",
   });
   downloadBlob(response.data, "plan_audit_superficies.xlsx");

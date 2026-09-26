@@ -292,6 +292,8 @@ class AuditSampleResponse(BaseModel):
     superficie_echantillon: float
     superficie_totale: float
     pourcentage_couverture: float
+    pourcentage_global: float = 25.0
+    pourcentage_brigade: float = 20.0
     par_classe: List[AuditClasseSyntheseOut]
     fiches_hors_echantillon: List[AuditFicheOut] = []
     par_brigade: List[Dict[str, Any]] = []

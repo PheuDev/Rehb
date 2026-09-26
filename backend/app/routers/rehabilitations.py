@@ -432,11 +432,28 @@ def _build_audit_excel_workbook(result: dict):
 
 @router.get("/audit-sample", response_model=schemas.AuditSampleResponse)
 def get_audit_sample(
+    pourcentage_global: float = Query(
+        25.0, ge=1, le=100,
+        description="% de la superficie totale à couvrir (25 par défaut)",
+    ),
+    pourcentage_brigade: float = Query(
+        20.0, ge=1, le=100,
+        description="% du nombre de fiches de chaque brigade à prélever (20 par défaut)",
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_active),
 ):
-    """Génère un plan d'échantillonnage aléatoire pour l'audit des superficies."""
-    result = crud.get_audit_sample(db, brigade_names=_scope(db, current_user))
+    """Génère un plan d'échantillonnage aléatoire pour l'audit des superficies.
+
+    Par défaut : 25 % de la superficie totale + au moins 20 % du nombre de
+    fiches par brigade. Chaque fiche n'est proposée qu'une seule fois.
+    """
+    result = crud.get_audit_sample(
+        db,
+        brigade_names=_scope(db, current_user),
+        pourcentage_global=pourcentage_global,
+        pourcentage_brigade=pourcentage_brigade,
+    )
 
     # Enrichir chaque fiche avec sa classe d'audit
     fiches_out = []
@@ -462,6 +479,8 @@ def get_audit_sample(
         "superficie_echantillon": result["superficie_echantillon"],
         "superficie_totale": result["superficie_totale"],
         "pourcentage_couverture": result["pourcentage_couverture"],
+        "pourcentage_global": result["pourcentage_global"],
+        "pourcentage_brigade": result["pourcentage_brigade"],
         "par_classe": result["par_classe"],
         "par_brigade": result["par_brigade"],
     }
@@ -470,11 +489,24 @@ def get_audit_sample(
 @router.get("/audit-sample/export-excel")
 def export_audit_excel(
     brigades: Optional[str] = Query(None, description="Noms de brigades séparés par virgule"),
+    pourcentage_global: float = Query(
+        25.0, ge=1, le=100,
+        description="% de la superficie totale à couvrir (25 par défaut)",
+    ),
+    pourcentage_brigade: float = Query(
+        20.0, ge=1, le=100,
+        description="% du nombre de fiches de chaque brigade à prélever (20 par défaut)",
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_active),
 ):
     """Exporte le plan d'audit en Excel : Feuille A (echantillon) + Feuille B (hors echantillon)."""
-    result = crud.get_audit_sample(db, brigade_names=_scope(db, current_user))
+    result = crud.get_audit_sample(
+        db,
+        brigade_names=_scope(db, current_user),
+        pourcentage_global=pourcentage_global,
+        pourcentage_brigade=pourcentage_brigade,
+    )
 
     brigade_filter = [b.strip() for b in brigades.split(",")] if brigades else None
     if brigade_filter:

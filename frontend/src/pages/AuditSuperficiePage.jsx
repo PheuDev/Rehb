@@ -71,10 +71,19 @@ export default function AuditSuperficiePage() {
   const [sortKey, setSortKey]                   = useState("brigade_name");
   const [sortDir, setSortDir]                   = useState("asc");
 
+  // Suggestion personnalisée (pourcentages au lieu des défauts 25 % / 20 %)
+  const [customMode, setCustomMode] = useState(false);
+  const [pctGlobal, setPctGlobal]   = useState(25);
+  const [pctBrigade, setPctBrigade] = useState(20);
+
+  const auditParams = () => customMode
+    ? { pourcentage_global: pctGlobal, pourcentage_brigade: pctBrigade }
+    : {};
+
   async function handleGenerate() {
     setLoading(true); setError(null);
     try {
-      const data = await getAuditSample();
+      const data = await getAuditSample(auditParams());
       setResult(data);
       setSelectedBrigades([]);
     } catch {
@@ -84,7 +93,7 @@ export default function AuditSuperficiePage() {
 
   async function handleExport() {
     setExporting(true);
-    try { await exportAuditExcel(selectedBrigades.length > 0 ? selectedBrigades : null); }
+    try { await exportAuditExcel(selectedBrigades.length > 0 ? selectedBrigades : null, auditParams()); }
     catch {} finally { setExporting(false); }
   }
 
@@ -184,7 +193,9 @@ export default function AuditSuperficiePage() {
               <div className="flex items-center gap-2">
                 <ClipboardCheck size={18} className="text-violet-500" />
                 <h2 className="text-lg font-semibold text-gray-900">Superficie à Auditer</h2>
-                <span className="hidden sm:inline text-xs text-gray-400">— 25% global · 20% fiches/brigade</span>
+                <span className="hidden sm:inline text-xs text-gray-400">
+                  — {customMode ? `${pctGlobal}% global · ${pctBrigade}% fiches/brigade` : "25% global · 20% fiches/brigade"}
+                </span>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -213,6 +224,79 @@ export default function AuditSuperficiePage() {
               )}
             </div>
           </div>
+
+          {/* Mode de suggestion : par défaut / personnalisé */}
+          {(!result || customMode) && (
+            <div className={`rounded-xl border p-4 space-y-3 ${customMode ? "border-violet-200 bg-violet-50/60" : "border-gray-200 bg-white"}`}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">
+                    {customMode ? "Ma suggestion personnalisée" : "Suggestion par défaut"}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {customMode ? (
+                      <>
+                        L'échantillon couvrira <strong>{pctGlobal} %</strong> de la superficie totale
+                        et au moins <strong>{pctBrigade} %</strong> du nombre de plantations de chaque brigade.
+                      </>
+                    ) : (
+                      <>
+                        Par défaut : <strong>25 %</strong> de la superficie totale ·
+                        au moins <strong>20 %</strong> des plantations de chaque brigade.
+                      </>
+                    )}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="btn-secondary text-xs px-3 py-1.5"
+                  onClick={() => setCustomMode((v) => !v)}
+                >
+                  {customMode ? "Revenir à la suggestion par défaut" : "Personnaliser ma suggestion"}
+                </button>
+              </div>
+
+              {customMode && (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <label className="block space-y-1">
+                    <span className="text-xs text-gray-600">
+                      % de la superficie totale couverte par l'échantillon
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={1} max={100} step={0.5}
+                        className="input"
+                        value={pctGlobal}
+                        onChange={(e) => setPctGlobal(Number(e.target.value) || 1)}
+                      />
+                      <span className="text-sm text-gray-400">% (25 % par défaut)</span>
+                    </div>
+                  </label>
+                  <label className="block space-y-1">
+                    <span className="text-xs text-gray-600">
+                      % du nombre de plantations par brigade à prélever
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={1} max={100} step={0.5}
+                        className="input"
+                        value={pctBrigade}
+                        onChange={(e) => setPctBrigade(Number(e.target.value) || 1)}
+                      />
+                      <span className="text-sm text-gray-400">% (20 % par défaut)</span>
+                    </div>
+                  </label>
+                </div>
+              )}
+
+              <p className="text-xs text-gray-400">
+                Une plantation ne peut être suggérée qu'une seule fois : une même fiche ne
+                peut pas être re-citée dans la même séquence de suggestion.
+              </p>
+            </div>
+          )}
 
           {/* Erreur */}
           {error && !loading && (
@@ -271,7 +355,7 @@ export default function AuditSuperficiePage() {
                 {[
                   { icon: ClipboardCheck, label: hasFilter ? "Fiches (filtrées)" : "Fiches sélectionnées", value: formatNumber(sortedFiches.length, 0), accent: "text-violet-500" },
                   { icon: TreeDeciduous,  label: "Superficie (ha)",   value: formatNumber(supEch),        accent: "text-forest-600" },
-                  { icon: Percent,        label: "Couverture",         value: `${pctEch} %`,               accent: pctEch >= 25 ? "text-emerald-600" : "text-amber-500" },
+                  { icon: Percent,        label: "Couverture",         value: `${pctEch} %`,               accent: pctEch >= (customMode ? pctGlobal : 25) ? "text-emerald-600" : "text-amber-500" },
                   { icon: BarChart3,      label: "Classes",            value: `${syntheseFiltered.length} / 8`, accent: "text-sky-500" },
                 ].map(({ icon: Icon, label, value, accent }) => (
                   <div key={label} className="rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm flex items-center gap-3">

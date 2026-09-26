@@ -480,17 +480,27 @@ def _audit_class(superficie: float) -> str:
 
 
 def get_audit_sample(
-    db: Session, brigade_names: Optional[list[str]] = None
+    db: Session,
+    brigade_names: Optional[list[str]] = None,
+    pourcentage_global: float = 25.0,
+    pourcentage_brigade: float = 20.0,
 ) -> dict:
     """Génère un plan d'échantillonnage aléatoire pour l'audit des superficies.
 
     Contraintes :
-    - Au moins 20 % de la superficie de CHAQUE brigade est couverte.
-    - La superficie totale sélectionnée >= 25 % de la superficie totale du système.
+    - Au moins ``pourcentage_brigade`` % du NOMBRE de fiches de CHAQUE
+      brigade est couvert (défaut 20 %).
+    - La superficie totale sélectionnée >= ``pourcentage_global`` % de la
+      superficie totale du système (défaut 25 %).
+    - Une fiche de réhabilitation ne peut être sélectionnée qu'UNE SEULE
+      fois dans une même séquence de suggestion (aucun doublon).
     - Toutes les classes présentes sont représentées.
     """
     import random
     import math
+
+    pct_global = pourcentage_global / 100.0
+    pct_brigade = pourcentage_brigade / 100.0
 
     query = db.query(Rehabilitation).filter(
         Rehabilitation.superficie_rehabilitee.isnot(None),
@@ -508,12 +518,14 @@ def get_audit_sample(
             "superficie_echantillon": 0.0,
             "superficie_totale": 0.0,
             "pourcentage_couverture": 0.0,
+            "pourcentage_global": pourcentage_global,
+            "pourcentage_brigade": pourcentage_brigade,
             "par_classe": [],
             "par_brigade": [],
         }
 
     superficie_totale = sum(float(r.superficie_rehabilitee) for r in rows)
-    seuil_global = superficie_totale * 0.25
+    seuil_global = superficie_totale * pct_global
 
     # Regrouper par brigade
     par_brigade_fiches: dict[str, list] = {}
@@ -527,7 +539,7 @@ def get_audit_sample(
     # Pour chaque brigade : selectionner au moins 20% du NOMBRE de fiches de la brigade
     for brigade, fiches_brigade in par_brigade_fiches.items():
         nb_brigade = len(fiches_brigade)
-        seuil_brigade = max(1, math.ceil(nb_brigade * 0.20))
+        seuil_brigade = max(1, math.ceil(nb_brigade * pct_brigade))
         shuffled = fiches_brigade.copy()
         random.shuffle(shuffled)
         nb_sel = 0
@@ -539,7 +551,7 @@ def get_audit_sample(
                 if nb_sel >= seuil_brigade:
                     break
 
-    # Completer si le global n'atteint pas 25%
+    # Completer si le global n'atteint pas le pourcentage demandé
     superficie_echantillon = sum(float(r.superficie_rehabilitee) for r in selected)
     if superficie_echantillon < seuil_global:
         remaining = sorted(
@@ -601,6 +613,8 @@ def get_audit_sample(
         "superficie_echantillon": superficie_echantillon,
         "superficie_totale": round(superficie_totale, 2),
         "pourcentage_couverture": pourcentage,
+        "pourcentage_global": pourcentage_global,
+        "pourcentage_brigade": pourcentage_brigade,
         "par_classe": par_classe,
         "par_brigade": par_brigade_synth,
     }
