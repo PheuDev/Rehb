@@ -1,7 +1,7 @@
 ﻿import { useState, useMemo } from "react";
 import {
   ArrowLeft, BarChart3, ChevronDown, ChevronUp, ChevronsUpDown,
-  ClipboardCheck, Download, RefreshCw, Save, Search, TreeDeciduous, Percent, X,
+  ClipboardCheck, Download, RefreshCw, Save, Search, Settings2, TreeDeciduous, Percent, X,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -80,16 +80,28 @@ export default function AuditSuperficiePage() {
     ? { pourcentage_global: pctGlobal, pourcentage_brigade: pctBrigade }
     : {};
 
-  async function handleGenerate() {
+  async function handleGenerate(params = null) {
     setLoading(true); setError(null);
     try {
-      const data = await getAuditSample(auditParams());
+      const data = await getAuditSample(params ?? auditParams());
       setResult(data);
       setSelectedBrigades([]);
     } catch {
       setError("Impossible de générer l'échantillon. Vérifiez que des fiches avec superficie existent.");
     } finally { setLoading(false); }
   }
+
+  // Actualiser : relance le tirage avec les réglages actuels (défaut ou personnalisés).
+  const handleRefresh = () => {
+    if (!result) return;
+    handleGenerate(auditParams());
+  };
+
+  // Nouvelle suggestion : tirage aléatoire avec les règles par défaut (25 % / 20 %).
+  const handleNewDefault = () => {
+    setCustomMode(false);
+    handleGenerate({});
+  };
 
   async function handleExport() {
     setExporting(true);
@@ -198,17 +210,38 @@ export default function AuditSuperficiePage() {
                 </span>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              {!result && !loading && (
-                <button onClick={handleGenerate} className="btn-primary">
-                  <ClipboardCheck size={15} /> Générer l'échantillon
-                </button>
-              )}
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleRefresh}
+                disabled={loading || !result}
+                className="btn-secondary text-xs px-3 py-1.5"
+                title="Relancer le tirage avec les réglages actuels"
+              >
+                <RefreshCw size={13} className={loading ? "animate-spin" : ""} /> Actualiser
+              </button>
+              <button
+                type="button"
+                onClick={() => setCustomMode(true)}
+                className="btn-secondary text-xs px-3 py-1.5"
+                title="Définir vos propres pourcentages (superficie / par brigade)"
+              >
+                {customMode ? <Settings2 size={13} className="text-violet-600" /> : <Settings2 size={13} />}
+                Suggestion personnalisée
+              </button>
+              <button
+                type="button"
+                onClick={handleNewDefault}
+                disabled={loading}
+                className="btn-primary text-xs px-3 py-1.5"
+                title="Nouveau tirage aléatoire avec les règles par défaut (25 % global · 20 % par brigade)"
+              >
+                {loading ? <Spinner size={13} /> : <ClipboardCheck size={13} />}
+                Nouvelle suggestion (règle par défaut)
+              </button>
+
               {result && (
                 <>
-                  <button onClick={handleGenerate} disabled={loading} className="btn-secondary text-xs px-3 py-1.5">
-                    <RefreshCw size={13} className={loading ? "animate-spin" : ""} /> Regénérer
-                  </button>
                   <button
                     type="button"
                     onClick={() => { setSaveOpen(true); setSaveSuccess(""); }}
@@ -216,7 +249,7 @@ export default function AuditSuperficiePage() {
                   >
                     <Save size={13} /> Sauvegarder la suggestion
                   </button>
-                  <button onClick={handleExport} disabled={exporting} className="btn-primary text-xs px-3 py-1.5">
+                  <button onClick={handleExport} disabled={exporting} className="btn-secondary text-xs px-3 py-1.5">
                     {exporting ? <Spinner size={13} /> : <Download size={13} />}
                     Excel{hasFilter ? ` (${selectedBrigades.length})` : ""}
                   </button>
@@ -291,6 +324,18 @@ export default function AuditSuperficiePage() {
                 </div>
               )}
 
+              {customMode && (
+                <button
+                  type="button"
+                  className="btn-primary text-sm self-start"
+                  disabled={loading}
+                  onClick={() => handleGenerate(auditParams())}
+                >
+                  {loading ? <Spinner size={14} /> : <ClipboardCheck size={14} />}
+                  Générer ma suggestion personnalisée
+                </button>
+              )}
+
               <p className="text-xs text-gray-400">
                 Une plantation ne peut être suggérée qu'une seule fois : une même fiche ne
                 peut pas être re-citée dans la même séquence de suggestion.
@@ -343,7 +388,10 @@ export default function AuditSuperficiePage() {
               </div>
               <div>
                 <p className="font-medium text-gray-700">Aucun échantillon généré</p>
-                <p className="mt-0.5 text-sm text-gray-400 max-w-xs">Cliquez sur "Générer l'échantillon" pour lancer le tirage aléatoire.</p>
+                <p className="mt-0.5 text-sm text-gray-400 max-w-sm">
+                  Cliquez sur "Nouvelle suggestion (règle par défaut)" ou sur
+                  "Suggestion personnalisée" pour lancer un tirage aléatoire.
+                </p>
               </div>
             </div>
           )}
