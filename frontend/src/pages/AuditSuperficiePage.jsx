@@ -1,14 +1,14 @@
 ﻿import { useState, useMemo } from "react";
 import {
   ArrowLeft, BarChart3, ChevronDown, ChevronUp, ChevronsUpDown,
-  ClipboardCheck, Download, RefreshCw, Search, TreeDeciduous, Users, Percent, X,
+  ClipboardCheck, Download, RefreshCw, Save, Search, TreeDeciduous, Percent, X,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import AppHeader from "../components/AppHeader.jsx";
 import Sidebar from "../components/Sidebar.jsx";
 import { Spinner } from "../components/ui.jsx";
-import { getAuditSample, exportAuditExcel } from "../api/rehabilitations.js";
+import { getAuditSample, exportAuditExcel, saveAuditSuggestion } from "../api/rehabilitations.js";
 import { formatNumber } from "../utils/format.js";
 
 // ─── Tri ──────────────────────────────────────────────────────────────────────
@@ -59,6 +59,10 @@ export default function AuditSuperficiePage() {
   const [result, setResult]           = useState(null);
   const [loading, setLoading]         = useState(false);
   const [exporting, setExporting]     = useState(false);
+  const [saving, setSaving]           = useState(false);
+  const [saveOpen, setSaveOpen]       = useState(false);
+  const [saveTitle, setSaveTitle]     = useState("");
+  const [saveSuccess, setSaveSuccess] = useState("");
   const [error, setError]             = useState(null);
 
   const [brigadeSearch, setBrigadeSearch]       = useState("");
@@ -81,6 +85,28 @@ export default function AuditSuperficiePage() {
     setExporting(true);
     try { await exportAuditExcel(selectedBrigades.length > 0 ? selectedBrigades : null); }
     catch {} finally { setExporting(false); }
+  }
+
+  async function handleSaveSuggestion(e) {
+    e.preventDefault();
+    if (!result) return;
+    setSaving(true);
+    setError(null);
+    setSaveSuccess("");
+    try {
+      await saveAuditSuggestion({
+        title: saveTitle.trim() || undefined,
+        brigade_filter: hasFilter ? selectedBrigades : null,
+        snapshot: result,
+      });
+      setSaveOpen(false);
+      setSaveTitle("");
+      setSaveSuccess("Suggestion enregistrée. Retrouvez-la dans Fiches d'audit.");
+    } catch {
+      setError("Impossible d'enregistrer la suggestion.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   function handleSort(field) {
@@ -165,6 +191,13 @@ export default function AuditSuperficiePage() {
                   <button onClick={handleGenerate} disabled={loading} className="btn-secondary text-xs px-3 py-1.5">
                     <RefreshCw size={13} className={loading ? "animate-spin" : ""} /> Regénérer
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => { setSaveOpen(true); setSaveSuccess(""); }}
+                    className="btn-secondary text-xs px-3 py-1.5"
+                  >
+                    <Save size={13} /> Sauvegarder la suggestion
+                  </button>
                   <button onClick={handleExport} disabled={exporting} className="btn-primary text-xs px-3 py-1.5">
                     {exporting ? <Spinner size={13} /> : <Download size={13} />}
                     Excel{hasFilter ? ` (${selectedBrigades.length})` : ""}
@@ -177,6 +210,14 @@ export default function AuditSuperficiePage() {
           {/* Erreur */}
           {error && !loading && (
             <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>
+          )}
+          {saveSuccess && (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 flex flex-wrap items-center justify-between gap-2">
+              <span>{saveSuccess}</span>
+              <button type="button" className="text-emerald-800 underline text-xs" onClick={() => navigate("/fiches-audit")}>
+                Ouvrir Fiches d'audit
+              </button>
+            </div>
           )}
 
           {/* Chargement */}
@@ -339,6 +380,41 @@ export default function AuditSuperficiePage() {
           )}
         </main>
       </div>
+
+      {saveOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !saving && setSaveOpen(false)}>
+          <form
+            className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+            onSubmit={handleSaveSuggestion}
+          >
+            <h3 className="font-semibold text-gray-900">Sauvegarder la suggestion</h3>
+            <p className="text-sm text-gray-500">
+              L'échantillon actuel ({result?.fiches?.length ?? 0} fiches) sera enregistré pour consultation et export ultérieur.
+            </p>
+            <div>
+              <label className="label" htmlFor="save-audit-title">Titre (optionnel)</label>
+              <input
+                id="save-audit-title"
+                className="input"
+                placeholder="Ex. Campagne audit T1 2026"
+                value={saveTitle}
+                onChange={(e) => setSaveTitle(e.target.value)}
+                maxLength={200}
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <button type="button" className="btn-secondary" disabled={saving} onClick={() => setSaveOpen(false)}>
+                Annuler
+              </button>
+              <button type="submit" className="btn-primary" disabled={saving}>
+                {saving ? <Spinner size={14} /> : <Save size={14} />}
+                Enregistrer
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

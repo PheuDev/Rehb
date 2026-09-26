@@ -295,3 +295,32 @@ class AuditSampleResponse(BaseModel):
     par_classe: List[AuditClasseSyntheseOut]
     fiches_hors_echantillon: List[AuditFicheOut] = []
     par_brigade: List[Dict[str, Any]] = []
+
+
+class SavedAuditSuggestionCreate(BaseModel):
+    title: Optional[str] = Field(None, max_length=200)
+    brigade_filter: Optional[List[str]] = None
+    snapshot: AuditSampleResponse
+
+
+class SavedAuditSuggestionSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    title: str
+    created_at: datetime
+    created_by_username: Optional[str] = None
+    created_by_full_name: Optional[str] = None
+    nb_fiches_echantillon: int
+    superficie_echantillon: Optional[float] = None
+    pourcentage_couverture: Optional[float] = None
+    brigade_filter: Optional[List[str]] = None
+
+
+class SavedAuditSuggestionDetail(SavedAuditSuggestionSummary):
+    snapshot: AuditSampleResponse
+
+
+class SavedAuditSuggestionListResponse(BaseModel):
+    items: List[SavedAuditSuggestionSummary]
+    total: int

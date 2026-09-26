@@ -4,7 +4,7 @@ from typing import Optional
 from sqlalchemy import or_, func, asc, desc
 from sqlalchemy.orm import Session
 
-from app.models import BrigadeEntity, Rehabilitation, TeamBrigadeAssignment, User
+from app.models import BrigadeEntity, Rehabilitation, SavedAuditSuggestion, TeamBrigadeAssignment, User
 from app.schemas import RehabilitationCreate, RehabilitationUpdate
 from app.completion import incomplete_condition
 
@@ -867,3 +867,78 @@ def get_all_incomplete_for_export(
         q, departement, commune, arrondissement, village, brigade_name, annee, sup_class,
         brigade_names=brigade_names,
     ).filter(incomplete_condition()).order_by(Rehabilitation.id).all()
+
+
+def create_saved_audit_suggestion(
+    db: Session,
+    *,
+    user: User,
+    title: str,
+    snapshot: dict,
+    brigade_filter: Optional[list[str]] = None,
+) -> SavedAuditSuggestion:
+    row = SavedAuditSuggestion(
+        title=title,
+        created_by_id=user.id,
+        brigade_filter=brigade_filter or None,
+        snapshot=snapshot,
+        nb_fiches_echantillon=len(snapshot.get("fiches") or []),
+        superficie_echantillon=snapshot.get("superficie_echantillon"),
+        pourcentage_couverture=snapshot.get("pourcentage_couverture"),
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def list_saved_audit_suggestions(db: Session) -> list[SavedAuditSuggestion]:
+    from sqlalchemy.orm import joinedload
+
+    return (
+        db.query(SavedAuditSuggestion)
+        .options(joinedload(SavedAuditSuggestion.created_by))
+        .order_by(SavedAuditSuggestion.created_at.desc())
+        .all()
+    )
+
+
+def get_saved_audit_suggestion(db: Session, suggestion_id: int) -> Optional[SavedAuditSuggestion]:
+    from sqlalchemy.orm import joinedload
+
+    return (
+        db.query(SavedAuditSuggestion)
+        .options(joinedload(SavedAuditSuggestion.created_by))
+        .filter(SavedAuditSuggestion.id == suggestion_id)
+        .first()
+    )
+
+
+def delete_saved_audit_suggestion(db: Session, suggestion_id: int) -> bool:
+    row = get_saved_audit_suggestion(db, suggestion_id)
+    if not row:
+        return False
+    db.delete(row)
+    db.commit()
+    return True
+
+
+def audit_snapshot_to_export_result(snapshot: dict) -> dict:
+    """Convertit un snapshot JSON en structure compatible avec l'export Excel audit."""
+
+    class _Row:
+        def __init__(self, data: dict):
+            self._data = data
+
+        def __getattr__(self, name):
+            return self._data.get(name)
+
+    fiches = [_Row(f) for f in snapshot.get("fiches") or []]
+    hors = [_Row(f) for f in snapshot.get("fiches_hors_echantillon") or []]
+    return {
+        "fiches": fiches,
+        "fiches_hors_echantillon": hors,
+        "par_brigade": snapshot.get("par_brigade") or [],
+        "superficie_echantillon": snapshot.get("superficie_echantillon") or 0,
+        "pourcentage_couverture": snapshot.get("pourcentage_couverture") or 0,
+    }

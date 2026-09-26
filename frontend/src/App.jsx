@@ -9,6 +9,7 @@ import DashboardPage from "./pages/DashboardPage.jsx";
 import ProducersPage from "./pages/ProducersPage.jsx";
 import DepartementsPage from "./pages/DepartementsPage.jsx";
 import AuditSuperficiePage from "./pages/AuditSuperficiePage.jsx";
+import FichesAuditPage from "./pages/FichesAuditPage.jsx";
 import AdminPage from "./pages/AdminPage.jsx";
 import TerrainPage from "./pages/TerrainPage.jsx";
 import MesFichesPage from "./pages/MesFichesPage.jsx";
@@ -28,6 +29,7 @@ export default function App() {
           <Route path="/producteurs" element={<PrivateRoute><ProducersPage /></PrivateRoute>} />
           <Route path="/departements" element={<PrivateRoute><DepartementsPage /></PrivateRoute>} />
           <Route path="/audit" element={<PrivateRoute><AuditSuperficiePage /></PrivateRoute>} />
+          <Route path="/fiches-audit" element={<PrivateRoute><FichesAuditPage /></PrivateRoute>} />
 
           {/* ── Terrain (binômes + chefs) ── */}
           <Route path="/terrain" element={

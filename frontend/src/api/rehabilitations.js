@@ -119,6 +119,32 @@ export async function exportAuditExcel(brigades = null) {
   downloadBlob(response.data, "plan_audit_superficies.xlsx");
 }
 
+export async function saveAuditSuggestion(payload) {
+  const { data } = await client.post("/rehabilitations/audit-suggestions", payload);
+  return data;
+}
+
+export async function listAuditSuggestions() {
+  const { data } = await client.get("/rehabilitations/audit-suggestions");
+  return data;
+}
+
+export async function getAuditSuggestion(id) {
+  const { data } = await client.get(`/rehabilitations/audit-suggestions/${id}`);
+  return data;
+}
+
+export async function exportSavedAuditExcel(id, filename = "plan_audit_superficies.xlsx") {
+  const response = await client.get(`/rehabilitations/audit-suggestions/${id}/export-excel`, {
+    responseType: "blob",
+  });
+  downloadBlob(response.data, filename);
+}
+
+export async function deleteAuditSuggestion(id) {
+  await client.delete(`/rehabilitations/audit-suggestions/${id}`);
+}
+
 export async function getBrigadesDetail(params) {
   const { data } = await client.get("/rehabilitations/brigades-detail", { params });
   return data;

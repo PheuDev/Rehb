@@ -321,6 +321,115 @@ def export_producteurs_excel(
 # ---------------------------------------------------------------------------
 # Audit superficies — échantillonnage aléatoire
 # ---------------------------------------------------------------------------
+
+def _saved_audit_summary(row) -> dict:
+    user = row.created_by
+    return {
+        "id": row.id,
+        "title": row.title,
+        "created_at": row.created_at,
+        "created_by_username": user.username if user else None,
+        "created_by_full_name": user.full_name if user else None,
+        "nb_fiches_echantillon": row.nb_fiches_echantillon,
+        "superficie_echantillon": float(row.superficie_echantillon) if row.superficie_echantillon is not None else None,
+        "pourcentage_couverture": float(row.pourcentage_couverture) if row.pourcentage_couverture is not None else None,
+        "brigade_filter": row.brigade_filter,
+    }
+
+
+def _build_audit_excel_workbook(result: dict):
+    """Construit le classeur Excel du plan d'audit (échantillon + hors échantillon + synthèse)."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    HEADER_FILL = PatternFill(start_color="2D6846", end_color="2D6846", fill_type="solid")
+    HEADER_FONT = Font(color="FFFFFF", bold=True)
+    BRIGADE_FILL = PatternFill(start_color="DCE0DC", end_color="DCE0DC", fill_type="solid")
+    BRIGADE_FONT = Font(bold=True)
+
+    COL_HEADERS = ["N°PDA", "Brigade", "Classe de superficie", "Departement", "Commune",
+                   "Arrondissement", "Village", "Producteur", "Superficie (ha)", "Annee"]
+
+    def _write_headers(ws):
+        ws.append(COL_HEADERS)
+        for i, _ in enumerate(COL_HEADERS, 1):
+            c = ws.cell(row=1, column=i)
+            c.fill = HEADER_FILL
+            c.font = HEADER_FONT
+            c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            ws.column_dimensions[get_column_letter(i)].width = 22
+        ws.row_dimensions[1].height = 28
+        ws.freeze_panes = "A2"
+
+    def _write_brigade_block(ws, brigade_name, fiches, row_num):
+        title_cell = ws.cell(row=row_num, column=1, value=f"  Brigade : {brigade_name}  ({len(fiches)} fiche(s))")
+        title_cell.fill = BRIGADE_FILL
+        title_cell.font = BRIGADE_FONT
+        ws.merge_cells(start_row=row_num, start_column=1, end_row=row_num, end_column=len(COL_HEADERS))
+        row_num += 1
+        for r in fiches:
+            sup = float(r.superficie_rehabilitee) if r.superficie_rehabilitee else None
+            ws.append([
+                r.pda_number,
+                r.brigade_name,
+                crud._audit_class(sup) if sup else None,
+                r.departement, r.commune, r.arrondissement, r.village,
+                r.producer_name, sup, r.annee_rehabilitation,
+            ])
+            row_num += 1
+        return row_num
+
+    wb = Workbook()
+
+    ws_a = wb.active
+    ws_a.title = "A - Echantillon audit"
+    _write_headers(ws_a)
+
+    brigades_a: dict[str, list] = {}
+    for r in result["fiches"]:
+        key = r.brigade_name or "— Sans brigade —"
+        brigades_a.setdefault(key, []).append(r)
+
+    row_a = 2
+    for brigade_name in sorted(brigades_a.keys()):
+        row_a = _write_brigade_block(ws_a, brigade_name, brigades_a[brigade_name], row_a)
+    ws_a.append([])
+    ws_a.append(["", "TOTAL ECHANTILLON", "", "", "", "", "", "",
+                 result["superficie_echantillon"],
+                 f"{result['pourcentage_couverture']} % de la superficie totale"])
+
+    ws_b = wb.create_sheet("B - Hors echantillon")
+    _write_headers(ws_b)
+
+    brigades_b: dict[str, list] = {}
+    for r in result["fiches_hors_echantillon"]:
+        key = r.brigade_name or "— Sans brigade —"
+        brigades_b.setdefault(key, []).append(r)
+
+    row_b = 2
+    for brigade_name in sorted(brigades_b.keys()):
+        row_b = _write_brigade_block(ws_b, brigade_name, brigades_b[brigade_name], row_b)
+
+    ws_c = wb.create_sheet("C - Synthese par brigade")
+    headers_c = ["Brigade", "Total fiches", "Fiches echantillon", "Couverture fiches (%)",
+                 "Superficie brigade (ha)", "Superficie echantillon (ha)", "Couverture superficie (%)"]
+    ws_c.append(headers_c)
+    for i, _ in enumerate(headers_c, 1):
+        c = ws_c.cell(row=1, column=i)
+        c.fill = HEADER_FILL
+        c.font = HEADER_FONT
+        ws_c.column_dimensions[get_column_letter(i)].width = 26
+    ws_c.freeze_panes = "A2"
+    for b in result["par_brigade"]:
+        ws_c.append([b["brigade"], b["total_fiches"], b["fiches_echantillon"],
+                     f"{b['pourcentage_fiches']} %",
+                     b["superficie_brigade"], b["superficie_echantillon"],
+                     f"{b['pourcentage_superficie']} %"])
+
+    return wb
+
+
 @router.get("/audit-sample", response_model=schemas.AuditSampleResponse)
 def get_audit_sample(
     db: Session = Depends(get_db),
@@ -365,13 +474,8 @@ def export_audit_excel(
     current_user: User = Depends(require_active),
 ):
     """Exporte le plan d'audit en Excel : Feuille A (echantillon) + Feuille B (hors echantillon)."""
-    from openpyxl import Workbook
-    from openpyxl.styles import Alignment, Font, PatternFill, Side, Border
-    from openpyxl.utils import get_column_letter
-
     result = crud.get_audit_sample(db, brigade_names=_scope(db, current_user))
 
-    # Filtrer par brigades sélectionnées si demandé
     brigade_filter = [b.strip() for b in brigades.split(",")] if brigades else None
     if brigade_filter:
         result = dict(result)
@@ -379,104 +483,80 @@ def export_audit_excel(
         result["fiches_hors_echantillon"] = [r for r in result["fiches_hors_echantillon"] if (r.brigade_name or "— Sans brigade —") in brigade_filter]
         result["par_brigade"] = [b for b in result["par_brigade"] if b["brigade"] in brigade_filter]
 
-    HEADER_FILL = PatternFill(start_color="2D6846", end_color="2D6846", fill_type="solid")
-    HEADER_FONT = Font(color="FFFFFF", bold=True)
-    BRIGADE_FILL = PatternFill(start_color="DCE0DC", end_color="DCE0DC", fill_type="solid")
-    BRIGADE_FONT = Font(bold=True)
+    wb = _build_audit_excel_workbook(result)
+    return _workbook_response(wb, "plan_audit_superficies.xlsx")
 
-    COL_HEADERS = ["N°PDA", "Brigade", "Classe de superficie", "Departement", "Commune",
-                   "Arrondissement", "Village", "Producteur", "Superficie (ha)", "Annee"]
 
-    def _write_headers(ws):
-        ws.append(COL_HEADERS)
-        for i, _ in enumerate(COL_HEADERS, 1):
-            c = ws.cell(row=1, column=i)
-            c.fill = HEADER_FILL
-            c.font = HEADER_FONT
-            c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-            ws.column_dimensions[get_column_letter(i)].width = 22
-        ws.row_dimensions[1].height = 28
-        ws.freeze_panes = "A2"
+@router.post("/audit-suggestions", response_model=schemas.SavedAuditSuggestionDetail, status_code=201)
+def save_audit_suggestion(
+    payload: schemas.SavedAuditSuggestionCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_active),
+):
+    """Enregistre une suggestion d'échantillon d'audit pour consultation ultérieure."""
+    from datetime import datetime
 
-    def _write_brigade_block(ws, brigade_name, fiches, row_num):
-        """Ecrit une ligne de titre de brigade puis les fiches."""
-        # Titre brigade
-        title_cell = ws.cell(row=row_num, column=1, value=f"  Brigade : {brigade_name}  ({len(fiches)} fiche(s))")
-        title_cell.fill = BRIGADE_FILL
-        title_cell.font = BRIGADE_FONT
-        ws.merge_cells(start_row=row_num, start_column=1, end_row=row_num, end_column=len(COL_HEADERS))
-        row_num += 1
-        for r in fiches:
-            sup = float(r.superficie_rehabilitee) if r.superficie_rehabilitee else None
-            ws.append([
-                r.pda_number,
-                r.brigade_name,
-                crud._audit_class(sup) if sup else None,
-                r.departement, r.commune, r.arrondissement, r.village,
-                r.producer_name, sup, r.annee_rehabilitation,
-            ])
-            row_num += 1
-        return row_num
+    title = (payload.title or "").strip()
+    if not title:
+        title = f"Suggestion du {datetime.now().strftime('%d/%m/%Y %H:%M')}"
 
-    wb = Workbook()
-
-    # ── Feuille A : plantations dans l'echantillon ───────────────────────
-    ws_a = wb.active
-    ws_a.title = "A - Echantillon audit"
-    _write_headers(ws_a)
-
-    # Grouper les fiches de l'echantillon par brigade
-    brigades_a: dict[str, list] = {}
-    for r in result["fiches"]:
-        key = r.brigade_name or "— Sans brigade —"
-        brigades_a.setdefault(key, []).append(r)
-
-    row_a = 2
-    for brigade_name in sorted(brigades_a.keys()):
-        row_a = _write_brigade_block(ws_a, brigade_name, brigades_a[brigade_name], row_a)
-    ws_a.append([])
-    ws_a.append(["", "TOTAL ECHANTILLON", "", "", "", "", "", "",
-                 result["superficie_echantillon"],
-                 f"{result['pourcentage_couverture']} % de la superficie totale"])
-
-    # ── Feuille B : plantations hors echantillon ─────────────────────────
-    ws_b = wb.create_sheet("B - Hors echantillon")
-    _write_headers(ws_b)
-
-    brigades_b: dict[str, list] = {}
-    for r in result["fiches_hors_echantillon"]:
-        key = r.brigade_name or "— Sans brigade —"
-        brigades_b.setdefault(key, []).append(r)
-
-    row_b = 2
-    for brigade_name in sorted(brigades_b.keys()):
-        row_b = _write_brigade_block(ws_b, brigade_name, brigades_b[brigade_name], row_b)
-
-    # ── Feuille C : synthese par brigade ─────────────────────────────────
-    ws_c = wb.create_sheet("C - Synthese par brigade")
-    headers_c = ["Brigade", "Total fiches", "Fiches echantillon", "Couverture fiches (%)",
-                 "Superficie brigade (ha)", "Superficie echantillon (ha)", "Couverture superficie (%)"]
-    ws_c.append(headers_c)
-    for i, _ in enumerate(headers_c, 1):
-        c = ws_c.cell(row=1, column=i)
-        c.fill = HEADER_FILL
-        c.font = HEADER_FONT
-        ws_c.column_dimensions[get_column_letter(i)].width = 26
-    ws_c.freeze_panes = "A2"
-    for b in result["par_brigade"]:
-        ws_c.append([b["brigade"], b["total_fiches"], b["fiches_echantillon"],
-                     f"{b['pourcentage_fiches']} %",
-                     b["superficie_brigade"], b["superficie_echantillon"],
-                     f"{b['pourcentage_superficie']} %"])
-
-    buffer = io.BytesIO()
-    wb.save(buffer)
-    buffer.seek(0)
-    return StreamingResponse(
-        buffer,
-        media_type=XLSX_MEDIA_TYPE,
-        headers={"Content-Disposition": "attachment; filename=plan_audit_superficies.xlsx"},
+    snapshot = payload.snapshot.model_dump(mode="json")
+    row = crud.create_saved_audit_suggestion(
+        db,
+        user=current_user,
+        title=title,
+        snapshot=snapshot,
+        brigade_filter=payload.brigade_filter or None,
     )
+    summary = _saved_audit_summary(row)
+    return {**summary, "snapshot": payload.snapshot}
+
+
+@router.get("/audit-suggestions", response_model=schemas.SavedAuditSuggestionListResponse)
+def list_audit_suggestions(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_active),
+):
+    rows = crud.list_saved_audit_suggestions(db)
+    items = [_saved_audit_summary(r) for r in rows]
+    return {"items": items, "total": len(items)}
+
+
+@router.get("/audit-suggestions/{suggestion_id}", response_model=schemas.SavedAuditSuggestionDetail)
+def get_audit_suggestion(
+    suggestion_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_active),
+):
+    row = crud.get_saved_audit_suggestion(db, suggestion_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Suggestion introuvable.")
+    return {**_saved_audit_summary(row), "snapshot": row.snapshot}
+
+
+@router.get("/audit-suggestions/{suggestion_id}/export-excel")
+def export_saved_audit_excel(
+    suggestion_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_active),
+):
+    row = crud.get_saved_audit_suggestion(db, suggestion_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Suggestion introuvable.")
+    result = crud.audit_snapshot_to_export_result(row.snapshot)
+    wb = _build_audit_excel_workbook(result)
+    safe_title = "".join(c if c.isalnum() or c in "._-" else "_" for c in row.title)[:60]
+    return _workbook_response(wb, f"audit_{safe_title or suggestion_id}.xlsx")
+
+
+@router.delete("/audit-suggestions/{suggestion_id}", status_code=204)
+def delete_audit_suggestion(
+    suggestion_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    if not crud.delete_saved_audit_suggestion(db, suggestion_id):
+        raise HTTPException(status_code=404, detail="Suggestion introuvable.")
 
 
 # ---------------------------------------------------------------------------

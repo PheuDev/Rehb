@@ -408,3 +408,30 @@ class ReplacementSelection(Base):
         Index("ix_rs_binome", "binome_id"),
         Index("ix_rs_original", "original_plantation_id"),
     )
+
+
+class SavedAuditSuggestion(Base):
+    """Suggestion d'échantillon d'audit superficie sauvegardée pour consultation ultérieure."""
+
+    __tablename__ = "saved_audit_suggestions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(200), nullable=False)
+    created_by_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    brigade_filter = Column(JSONB, nullable=True, comment="Filtre brigades actif à la sauvegarde")
+    snapshot = Column(JSONB, nullable=False, comment="Résultat complet de l'échantillon d'audit")
+    nb_fiches_echantillon = Column(Integer, nullable=False, default=0)
+    superficie_echantillon = Column(Numeric(12, 2), nullable=True)
+    pourcentage_couverture = Column(Numeric(6, 2), nullable=True)
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+
+    created_by = relationship("User", foreign_keys=[created_by_id])
+
+    __table_args__ = (
+        Index("ix_saved_audit_created_at", "created_at"),
+    )

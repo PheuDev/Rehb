@@ -42,7 +42,8 @@ const NAV_SECTIONS = [
   {
     label: "Outils",
     items: [
-      { path: "/audit",  icon: ClipboardCheck, label: "Superficie à Auditer", accent: "bg-violet-100 text-violet-700" },
+      { path: "/audit",         icon: ClipboardCheck, label: "Superficie à Auditer", accent: "bg-violet-100 text-violet-700" },
+      { path: "/fiches-audit",  icon: FileText,       label: "Fiches d'audit",       accent: "bg-violet-100 text-violet-700" },
     ],
   },
   {
