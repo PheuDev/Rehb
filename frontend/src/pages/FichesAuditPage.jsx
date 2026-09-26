@@ -131,7 +131,9 @@ export default function FichesAuditPage() {
   }
 
   async function handleDelete(id) {
-    if (!window.confirm("Supprimer cette suggestion enregistrée ?")) return;
+    if (!window.confirm(
+      "Supprimer cette suggestion ?\n\nLes fiches de cette suggestion distribuées aux équipes (Mes plantations) seront AUSSI supprimées et disparaîtront pour les binômes concernés."
+    )) return;
     try {
       await deleteAuditSuggestion(id);
       setItems((prev) => prev.filter((i) => i.id !== id));

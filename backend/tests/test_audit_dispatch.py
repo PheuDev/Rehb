@@ -319,3 +319,120 @@ def test_save_audit_registers_fiche_for_team_without_binome():
             .filter(TeamAuditAssignment.team_id == 1)
             .count()
         ) == 1
+def test_delete_suggestion_removes_dispatched_plantations():
+    """Supprimer la suggestion retire les fiches distribuées aux équipes."""
+    client, session_factory = make_client()
+
+    created = client.post(
+        "/api/rehabilitations/audit-suggestions",
+        json={"title": "À supprimer", "snapshot": SAMPLE_SNAPSHOT},
+    )
+    assert created.status_code == 201
+    suggestion_id = created.json()["id"]
+    assert created.json()["dispatch"]["fiches_dispatched"] == 1
+
+    deleted = client.delete(f"/api/rehabilitations/audit-suggestions/{suggestion_id}")
+    assert deleted.status_code == 204
+    assert (
+        client.get(f"/api/rehabilitations/audit-suggestions/{suggestion_id}").status_code
+        == 404
+    )
+
+    with session_factory() as db:
+        # Plus aucune trace de la distribution dans les équipes.
+        assert db.query(SampleAssignment).count() == 0
+        assert db.query(TeamAuditAssignment).count() == 0
+        assert db.query(Plantation).count() == 0
+        # La fiche de réhabilitation est conservée, mais ne pointe plus vers rien.
+        rehab = db.query(Rehabilitation).filter(Rehabilitation.id == 1).first()
+        assert rehab is not None
+        assert rehab.plantation_id is None
+
+
+def make_reused_plantations_client():
+    """Équipe + brigade + fiche dont la plantation existe déjà (réutilisation)."""
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    TestingSession = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+
+    with TestingSession() as db:
+        db.add(
+            User(
+                id=1,
+                username="admin",
+                full_name="Admin",
+                role="admin",
+                is_active=True,
+                hashed_password="hashed",
+            )
+        )
+        db.add(Team(id=1, name="Équipe A"))
+        db.add(Binome(id=1, name="Binôme 1", team_id=1))
+        db.add(BrigadeEntity(id=1, name="Brigade Alpha"))
+        db.add(TeamBrigadeAssignment(brigade_id=1, team_id=1))
+        db.add(
+            Rehabilitation(
+                id=1, pda_number="PDA-1", brigade_name="Brigade Alpha",
+                superficie_rehabilitee=5, annee_rehabilitation=2024,
+            )
+        )
+        # La plantation de la fiche existe déjà avant toute suggestion.
+        db.add(Plantation(
+            id=1, pda_number="PDA-1", brigade_id=1,
+            is_sample=True, source_rehabilitation_id=1,
+        ))
+        db.commit()
+
+    def override_get_db():
+        db = TestingSession()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app = FastAPI()
+    app.include_router(rehabilitations.router)
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[require_active] = lambda: ADMIN
+    app.dependency_overrides[require_admin] = lambda: ADMIN
+    return TestClient(app), TestingSession
+
+
+def test_delete_reused_suggestion_spares_other_suggestion_distribution():
+    """Une plantation réutilisée ne disparaît pas si une autre
+    suggestion la référence encore — seule la suggestion « propriétaire »
+    (celle qui a créé le lien équipe) nettoie la distribution."""
+    client, session_factory = make_reused_plantations_client()
+
+    a = client.post(
+        "/api/rehabilitations/audit-suggestions",
+        json={"title": "Campagne A", "snapshot": SAMPLE_SNAPSHOT},
+    ).json()
+    b = client.post(
+        "/api/rehabilitations/audit-suggestions",
+        json={"title": "Campagne B", "snapshot": SAMPLE_SNAPSHOT},
+    ).json()
+    assert a["dispatch"]["plantations_reused"] == 1
+    assert b["dispatch"]["plantations_reused"] == 1
+
+    # Une seule attribution de binôme, un seul lien équipe (contrainte unique).
+    with session_factory() as db:
+        assert db.query(SampleAssignment).count() == 1
+        assert db.query(TeamAuditAssignment).count() == 1
+
+    # Supprimer la suggestion B (réutilisée sans lien propre) : rien ne bouge.
+    assert client.delete(f"/api/rehabilitations/audit-suggestions/{b['id']}").status_code == 204
+    with session_factory() as db:
+        assert db.query(Plantation).count() == 1
+        assert db.query(SampleAssignment).count() == 1
+
+    # Supprimer la suggestion propriétaire A : la distribution disparaît.
+    assert client.delete(f"/api/rehabilitations/audit-suggestions/{a['id']}").status_code == 204
+    with session_factory() as db:
+        assert db.query(Plantation).count() == 0
+        assert db.query(SampleAssignment).count() == 0
+        assert db.query(TeamAuditAssignment).count() == 0

@@ -9,6 +9,7 @@ from app.models import (
     BrigadeEntity,
     Plantation,
     Rehabilitation,
+    ReplacementSelection,
     SampleAssignment,
     SavedAuditSuggestion,
     Team,
@@ -1081,9 +1082,66 @@ def get_saved_audit_suggestion(db: Session, suggestion_id: int) -> Optional[Save
 
 
 def delete_saved_audit_suggestion(db: Session, suggestion_id: int) -> bool:
+    """Supprime une suggestion d'audit ET ce qui a été distribué aux équipes.
+
+    Nettoyage (uniquement pour les plantations distribuées par CETTE
+    suggestion, via ``team_audit_assignments``) :
+      - liens équipe → plantation  (team_audit_assignments)
+      - attributions aux binômes   (sample_assignments) → « Mes plantations »
+      - plantations créées         (plantations), sauf si partagées avec une
+        autre suggestion d'audit (dans ce cas on conserve l'existant)
+      - fiches source             (rehabilitations.plantation_id remis à NULL)
+      - remplacements liés        (replacement_selections)
+    Les fiches de réhabilitation elles-mêmes sont CONSERVÉES (données de
+    référence, pas des éléments distribués aux équipes).
+    """
     row = get_saved_audit_suggestion(db, suggestion_id)
     if not row:
         return False
+
+    links = (
+        db.query(TeamAuditAssignment)
+        .filter(TeamAuditAssignment.audit_suggestion_id == suggestion_id)
+        .all()
+    )
+    plantation_ids = sorted({l.plantation_id for l in links})
+
+    # 1. Retire les liens de cette suggestion vers les équipes.
+    for link in links:
+        db.delete(link)
+    db.flush()
+
+    # 2. Supprime les plantations qui n'appartiennent qu'à cette suggestion.
+    if plantation_ids:
+        still_used = set(
+            pid
+            for (pid,) in (
+                db.query(TeamAuditAssignment.plantation_id)
+                .filter(TeamAuditAssignment.plantation_id.in_(plantation_ids))
+                .all()
+            )
+        )
+        to_delete = [pid for pid in plantation_ids if pid not in still_used]
+        if to_delete:
+            # Les fiches source ne pointent plus vers ces plantations.
+            db.query(Rehabilitation).filter(
+                Rehabilitation.plantation_id.in_(to_delete)
+            ).update({Rehabilitation.plantation_id: None}, synchronize_session=False)
+            # Remplacements éventuels (originale ou remplacement).
+            db.query(ReplacementSelection).filter(
+                or_(
+                    ReplacementSelection.original_plantation_id.in_(to_delete),
+                    ReplacementSelection.replacement_plantation_id.in_(to_delete),
+                )
+            ).delete(synchronize_session=False)
+            # Plus aucune plantation dans « Mes plantations » des binômes.
+            db.query(SampleAssignment).filter(
+                SampleAssignment.plantation_id.in_(to_delete)
+            ).delete(synchronize_session=False)
+            db.query(Plantation).filter(
+                Plantation.id.in_(to_delete)
+            ).delete(synchronize_session=False)
+
     db.delete(row)
     db.commit()
     return True
