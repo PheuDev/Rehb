@@ -47,16 +47,14 @@ BASE_DDL = [
     $$ LANGUAGE plpgsql""",
 
     # ------------------------------------------------------------------
-    # Équipes
+    # Équipes (sans campagne — entité permanente)
     # ------------------------------------------------------------------
     """CREATE TABLE IF NOT EXISTS teams (
         id          SERIAL       PRIMARY KEY,
-        name        VARCHAR(180) NOT NULL,
-        campaign    VARCHAR(50)  NOT NULL,
-        created_at  TIMESTAMPTZ  DEFAULT NOW(),
-        CONSTRAINT uq_team_name_campaign UNIQUE (name, campaign)
+        name        VARCHAR(180) NOT NULL UNIQUE,
+        created_at  TIMESTAMPTZ  DEFAULT NOW()
     )""",
-    "CREATE INDEX IF NOT EXISTS ix_team_campaign ON teams (campaign)",
+    "CREATE INDEX IF NOT EXISTS ix_team_name ON teams (name)",
 
     # ------------------------------------------------------------------
     # Binômes
@@ -107,18 +105,15 @@ BASE_DDL = [
     "CREATE INDEX IF NOT EXISTS ix_brigade_entities_name ON brigade_entities (name)",
 
     # ------------------------------------------------------------------
-    # Affectations brigade → équipe
+    # Affectations brigade → équipe (UNIQUE brigade_id = une brigade, une équipe)
     # ------------------------------------------------------------------
     """CREATE TABLE IF NOT EXISTS team_brigade_assignments (
-        id          SERIAL      PRIMARY KEY,
-        brigade_id  INTEGER     NOT NULL REFERENCES brigade_entities (id) ON DELETE CASCADE,
-        team_id     INTEGER     NOT NULL REFERENCES teams             (id) ON DELETE CASCADE,
-        campaign    VARCHAR(50) NOT NULL,
-        created_at  TIMESTAMPTZ DEFAULT NOW(),
-        CONSTRAINT uq_brigade_campaign UNIQUE (brigade_id, campaign)
+        id          SERIAL  PRIMARY KEY,
+        brigade_id  INTEGER NOT NULL UNIQUE REFERENCES brigade_entities (id) ON DELETE CASCADE,
+        team_id     INTEGER NOT NULL        REFERENCES teams             (id) ON DELETE CASCADE,
+        created_at  TIMESTAMPTZ DEFAULT NOW()
     )""",
-    "CREATE INDEX IF NOT EXISTS ix_tba_team     ON team_brigade_assignments (team_id)",
-    "CREATE INDEX IF NOT EXISTS ix_tba_campaign ON team_brigade_assignments (campaign)",
+    "CREATE INDEX IF NOT EXISTS ix_tba_team ON team_brigade_assignments (team_id)",
 
     # ------------------------------------------------------------------
     # Plantations
@@ -170,6 +165,9 @@ BASE_DDL = [
 
     # ------------------------------------------------------------------
     # Fiches de réhabilitation
+    # NOTE : author_id et plantation_id sont ajoutés APRÈS via
+    #        migrate_phase2_columns() pour éviter tout problème d'ordre
+    #        de création sur une base existante (production).
     # ------------------------------------------------------------------
     """CREATE TABLE IF NOT EXISTS rehabilitations (
         id                          SERIAL       PRIMARY KEY,
@@ -211,8 +209,6 @@ BASE_DDL = [
         debardage_operateur_nom     VARCHAR(180),
         debardage_operateur_phone   VARCHAR(30),
         observations                TEXT,
-        author_id                   INTEGER      REFERENCES users        (id) ON DELETE SET NULL,
-        plantation_id               INTEGER      REFERENCES plantations  (id) ON DELETE SET NULL,
         created_at                  TIMESTAMPTZ  DEFAULT NOW(),
         updated_at                  TIMESTAMPTZ  DEFAULT NOW()
     )""",
@@ -228,8 +224,7 @@ BASE_DDL = [
     "CREATE INDEX IF NOT EXISTS ix_rehab_annee        ON rehabilitations (annee_rehabilitation)",
     "CREATE INDEX IF NOT EXISTS ix_rehab_sup_class    ON rehabilitations (sup_class)",
     "CREATE INDEX IF NOT EXISTS ix_rehab_brigade      ON rehabilitations (brigade_name)",
-    "CREATE INDEX IF NOT EXISTS ix_rehab_author       ON rehabilitations (author_id)",
-    "CREATE INDEX IF NOT EXISTS ix_rehab_plantation   ON rehabilitations (plantation_id)",
+    # ix_rehab_author et ix_rehab_plantation sont créés par migrate_phase2_columns()
 
     """CREATE INDEX IF NOT EXISTS ix_rehab_search_trgm ON rehabilitations
     USING GIN (
@@ -365,49 +360,149 @@ def migrate_nullable_rehabilitations() -> None:
 
 
 def migrate_phase2_columns() -> None:
-    """Ajoute author_id et plantation_id sur rehabilitations si absentes."""
+    """Ajoute author_id et plantation_id sur rehabilitations si absentes.
+
+    Stratégie sûre pour la production :
+    - Vérifie l'existence de la colonne avant d'agir (idempotent)
+    - Utilise ADD COLUMN IF NOT EXISTS (PostgreSQL 9.6+)
+    - Ne touche jamais aux données existantes
+    """
+    if engine.dialect.name != "postgresql":
+        return
+
+    with engine.begin() as conn:
+        # author_id — FK vers users (nullable)
+        try:
+            conn.exec_driver_sql(
+                "ALTER TABLE rehabilitations "
+                "ADD COLUMN IF NOT EXISTS author_id INTEGER"
+            )
+            # Ajoute la contrainte FK seulement si elle n'existe pas déjà
+            fk_exists = conn.execute(text(
+                "SELECT 1 FROM information_schema.table_constraints tc "
+                "JOIN information_schema.key_column_usage kcu "
+                "  ON tc.constraint_name = kcu.constraint_name "
+                "WHERE tc.table_name = 'rehabilitations' "
+                "  AND tc.constraint_type = 'FOREIGN KEY' "
+                "  AND kcu.column_name = 'author_id'"
+            )).scalar()
+            if not fk_exists:
+                conn.exec_driver_sql(
+                    "ALTER TABLE rehabilitations "
+                    "ADD CONSTRAINT fk_rehab_author "
+                    "FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE SET NULL"
+                )
+            conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_rehab_author ON rehabilitations (author_id)"
+            )
+        except Exception as exc:
+            logger.warning("Migration author_id : %s", exc)
+
+        # plantation_id — FK vers plantations (nullable)
+        try:
+            conn.exec_driver_sql(
+                "ALTER TABLE rehabilitations "
+                "ADD COLUMN IF NOT EXISTS plantation_id INTEGER"
+            )
+            fk_exists2 = conn.execute(text(
+                "SELECT 1 FROM information_schema.table_constraints tc "
+                "JOIN information_schema.key_column_usage kcu "
+                "  ON tc.constraint_name = kcu.constraint_name "
+                "WHERE tc.table_name = 'rehabilitations' "
+                "  AND tc.constraint_type = 'FOREIGN KEY' "
+                "  AND kcu.column_name = 'plantation_id'"
+            )).scalar()
+            if not fk_exists2:
+                conn.exec_driver_sql(
+                    "ALTER TABLE rehabilitations "
+                    "ADD CONSTRAINT fk_rehab_plantation "
+                    "FOREIGN KEY (plantation_id) REFERENCES plantations(id) ON DELETE SET NULL"
+                )
+            conn.exec_driver_sql(
+                "CREATE INDEX IF NOT EXISTS ix_rehab_plantation ON rehabilitations (plantation_id)"
+            )
+        except Exception as exc:
+            logger.warning("Migration plantation_id : %s", exc)
+
+
+def migrate_teams_schema() -> None:
+    """Supprime la colonne campaign de teams si elle existe (migration prod)."""
     if engine.dialect.name != "postgresql":
         return
     with engine.begin() as conn:
-        # author_id
-        exists = conn.execute(
-            text(
-                "SELECT 1 FROM information_schema.columns "
-                "WHERE table_name='rehabilitations' AND column_name='author_id'"
-            )
-        ).scalar()
-        if not exists:
-            try:
-                conn.exec_driver_sql(
-                    "ALTER TABLE rehabilitations "
-                    "ADD COLUMN author_id INTEGER REFERENCES users(id) ON DELETE SET NULL"
-                )
-                conn.exec_driver_sql(
-                    "CREATE INDEX IF NOT EXISTS ix_rehab_author ON rehabilitations (author_id)"
-                )
-                logger.info("Colonne author_id ajoutée à rehabilitations.")
-            except Exception as exc:
-                logger.warning("author_id non ajouté : %s", exc)
+        has_campaign = conn.execute(text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name='teams' AND column_name='campaign'"
+        )).scalar()
+        if not has_campaign:
+            return
+        # Supprimer la contrainte UNIQUE(name, campaign) si elle existe
+        try:
+            conn.exec_driver_sql("ALTER TABLE teams DROP CONSTRAINT IF EXISTS uq_team_name_campaign")
+        except Exception:
+            pass
+        # Supprimer la colonne
+        try:
+            conn.exec_driver_sql("ALTER TABLE teams DROP COLUMN IF EXISTS campaign")
+        except Exception as exc:
+            logger.warning("migrate_teams_schema campaign : %s", exc)
+        # Ajouter UNIQUE(name) si absent
+        try:
+            conn.exec_driver_sql("ALTER TABLE teams ADD CONSTRAINT uq_team_name UNIQUE (name)")
+        except Exception:
+            pass  # Contrainte déjà existante
+        logger.info("Migration teams : colonne campaign supprimée.")
 
-        # plantation_id
-        exists2 = conn.execute(
-            text(
-                "SELECT 1 FROM information_schema.columns "
-                "WHERE table_name='rehabilitations' AND column_name='plantation_id'"
-            )
-        ).scalar()
-        if not exists2:
+
+def migrate_assignments_schema() -> None:
+    """Supprime campaign sur team_brigade_assignments et ajoute UNIQUE(brigade_id)."""
+    if engine.dialect.name != "postgresql":
+        return
+    with engine.begin() as conn:
+        has_campaign = conn.execute(text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name='team_brigade_assignments' AND column_name='campaign'"
+        )).scalar()
+        if has_campaign:
             try:
                 conn.exec_driver_sql(
-                    "ALTER TABLE rehabilitations "
-                    "ADD COLUMN plantation_id INTEGER REFERENCES plantations(id) ON DELETE SET NULL"
+                    "ALTER TABLE team_brigade_assignments DROP CONSTRAINT IF EXISTS uq_brigade_campaign"
                 )
                 conn.exec_driver_sql(
-                    "CREATE INDEX IF NOT EXISTS ix_rehab_plantation ON rehabilitations (plantation_id)"
+                    "ALTER TABLE team_brigade_assignments DROP COLUMN IF EXISTS campaign"
                 )
-                logger.info("Colonne plantation_id ajoutée à rehabilitations.")
+                logger.info("Migration assignments : colonne campaign supprimée.")
             except Exception as exc:
-                logger.warning("plantation_id non ajouté : %s", exc)
+                logger.warning("migrate_assignments_schema : %s", exc)
+
+        # Dédoublonner si plusieurs affectations pour une même brigade
+        try:
+            conn.exec_driver_sql(
+                "DELETE FROM team_brigade_assignments tba1 "
+                "USING team_brigade_assignments tba2 "
+                "WHERE tba1.brigade_id = tba2.brigade_id AND tba1.id > tba2.id"
+            )
+        except Exception:
+            pass
+
+        # Ajouter UNIQUE(brigade_id) si absent
+        has_uniq = conn.execute(text(
+            "SELECT 1 FROM information_schema.table_constraints tc "
+            "JOIN information_schema.key_column_usage kcu "
+            "  ON tc.constraint_name = kcu.constraint_name "
+            "WHERE tc.table_name = 'team_brigade_assignments' "
+            "  AND tc.constraint_type = 'UNIQUE' "
+            "  AND kcu.column_name = 'brigade_id'"
+        )).scalar()
+        if not has_uniq:
+            try:
+                conn.exec_driver_sql(
+                    "ALTER TABLE team_brigade_assignments "
+                    "ADD CONSTRAINT uq_tba_brigade_unique UNIQUE (brigade_id)"
+                )
+                logger.info("Migration assignments : contrainte UNIQUE(brigade_id) ajoutée.")
+            except Exception as exc:
+                logger.warning("migrate_assignments_schema UNIQUE : %s", exc)
 
 
 def _rebuild_view() -> None:
@@ -470,6 +565,8 @@ def _seed_default_admin() -> None:
 async def lifespan(app: FastAPI):
     ensure_database_schema()
     migrate_nullable_rehabilitations()
+    migrate_teams_schema()        # supprime campaign sur teams si nécessaire
+    migrate_assignments_schema()  # supprime campaign sur assignments, ajoute UNIQUE(brigade_id)
     migrate_phase2_columns()
     _rebuild_view()
     _seed_default_admin()

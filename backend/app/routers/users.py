@@ -36,18 +36,15 @@ router = APIRouter(tags=["Utilisateurs & Équipes"])
 
 class TeamCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=180)
-    campaign: str = Field(..., min_length=1, max_length=50, description="Ex : '2025'")
 
 
 class TeamUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=180)
-    campaign: Optional[str] = Field(None, min_length=1, max_length=50)
 
 
 class TeamOut(BaseModel):
     id: int
     name: str
-    campaign: str
     nb_binomes: int = 0
     nb_members: int = 0
 
@@ -158,59 +155,29 @@ def _user_to_out(u: User) -> UserOut:
 
 @router.get("/api/teams", response_model=list[TeamOut], summary="Liste des équipes")
 def list_teams(
-    campaign: Optional[str] = Query(None),
     current_user: User = Depends(require_active),
     db: Session = Depends(get_db),
 ):
-    """Retourne toutes les équipes.
-
-    - Un admin voit toutes les équipes.
-    - Un autre rôle ne voit que son équipe.
-    """
     query = db.query(Team)
-    if campaign:
-        query = query.filter(Team.campaign == campaign)
     if current_user.role != "admin" and current_user.team_id:
         query = query.filter(Team.id == current_user.team_id)
-    teams = query.order_by(Team.campaign.desc(), Team.name).all()
-    result = []
-    for t in teams:
-        result.append(TeamOut(
-            id=t.id,
-            name=t.name,
-            campaign=t.campaign,
-            nb_binomes=len(t.binomes),
-            nb_members=len(t.members),
-        ))
-    return result
+    teams = query.order_by(Team.name).all()
+    return [TeamOut(id=t.id, name=t.name, nb_binomes=len(t.binomes), nb_members=len(t.members)) for t in teams]
 
 
-@router.post(
-    "/api/teams",
-    response_model=TeamOut,
-    status_code=status.HTTP_201_CREATED,
-    summary="Créer une équipe",
-)
+@router.post("/api/teams", response_model=TeamOut, status_code=status.HTTP_201_CREATED, summary="Créer une équipe")
 def create_team(
     payload: TeamCreate,
     current_user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    existing = (
-        db.query(Team)
-        .filter(Team.name == payload.name, Team.campaign == payload.campaign)
-        .first()
-    )
-    if existing:
-        raise HTTPException(
-            status_code=409,
-            detail="Une équipe avec ce nom existe déjà pour cette campagne.",
-        )
-    team = Team(name=payload.name, campaign=payload.campaign)
+    if db.query(Team).filter(Team.name == payload.name).first():
+        raise HTTPException(status_code=409, detail="Une équipe avec ce nom existe déjà.")
+    team = Team(name=payload.name)
     db.add(team)
     db.commit()
     db.refresh(team)
-    return TeamOut(id=team.id, name=team.name, campaign=team.campaign)
+    return TeamOut(id=team.id, name=team.name)
 
 
 @router.get("/api/teams/{team_id}", response_model=TeamOut, summary="Détail d'une équipe")
@@ -220,16 +187,9 @@ def get_team(
     db: Session = Depends(get_db),
 ):
     team = _get_team_or_404(db, team_id)
-    # Un non-admin ne peut voir que son équipe
     if current_user.role != "admin" and current_user.team_id != team_id:
         raise HTTPException(status_code=403, detail="Accès refusé.")
-    return TeamOut(
-        id=team.id,
-        name=team.name,
-        campaign=team.campaign,
-        nb_binomes=len(team.binomes),
-        nb_members=len(team.members),
-    )
+    return TeamOut(id=team.id, name=team.name, nb_binomes=len(team.binomes), nb_members=len(team.members))
 
 
 @router.put("/api/teams/{team_id}", response_model=TeamOut, summary="Modifier une équipe")
@@ -242,17 +202,9 @@ def update_team(
     team = _get_team_or_404(db, team_id)
     if payload.name is not None:
         team.name = payload.name
-    if payload.campaign is not None:
-        team.campaign = payload.campaign
     db.commit()
     db.refresh(team)
-    return TeamOut(
-        id=team.id,
-        name=team.name,
-        campaign=team.campaign,
-        nb_binomes=len(team.binomes),
-        nb_members=len(team.members),
-    )
+    return TeamOut(id=team.id, name=team.name, nb_binomes=len(team.binomes), nb_members=len(team.members))
 
 
 @router.delete("/api/teams/{team_id}", status_code=204, summary="Supprimer une équipe")

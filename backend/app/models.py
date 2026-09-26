@@ -120,25 +120,23 @@ class Rehabilitation(Base):
 # =============================================================================
 
 class Team(Base):
-    """Équipe de terrain, rattachée à une campagne d'audit (ex. '2025').
+    """Équipe de terrain.
 
     Une équipe regroupe plusieurs binômes et est responsable d'une ou plusieurs
-    brigades pour une campagne donnée.
+    brigades.
     """
 
     __tablename__ = "teams"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(180), nullable=False)
-    campaign = Column(String(50), nullable=False, comment="Ex : '2025'")
+    name = Column(String(180), nullable=False, unique=True)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
     members = relationship("User", back_populates="team", foreign_keys="User.team_id")
     binomes = relationship("Binome", back_populates="team")
 
     __table_args__ = (
-        UniqueConstraint("name", "campaign", name="uq_team_name_campaign"),
-        Index("ix_team_campaign", "campaign"),
+        Index("ix_team_name", "name"),
     )
 
 
@@ -236,11 +234,10 @@ class BrigadeEntity(Base):
 
 
 class TeamBrigadeAssignment(Base):
-    """Affectation d'une brigade à une équipe pour une campagne.
+    """Affectation d'une brigade à une équipe.
 
-    Règle métier : une brigade NE PEUT PAS être affectée simultanément
-    à plusieurs équipes dans la MÊME campagne.
-    Garantie par la contrainte UNIQUE(brigade_id, campaign).
+    Règle métier : une brigade NE PEUT PAS être affectée à plusieurs équipes.
+    Garantie par la contrainte UNIQUE(brigade_id).
     """
 
     __tablename__ = "team_brigade_assignments"
@@ -250,22 +247,20 @@ class TeamBrigadeAssignment(Base):
         Integer,
         ForeignKey("brigade_entities.id", ondelete="CASCADE"),
         nullable=False,
+        unique=True,   # Une brigade → une seule équipe
     )
     team_id = Column(
         Integer,
         ForeignKey("teams.id", ondelete="CASCADE"),
         nullable=False,
     )
-    campaign = Column(String(50), nullable=False, comment="Ex : '2025'")
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
     brigade = relationship("BrigadeEntity", back_populates="assignments")
     team = relationship("Team")
 
     __table_args__ = (
-        UniqueConstraint("brigade_id", "campaign", name="uq_brigade_campaign"),
         Index("ix_tba_team", "team_id"),
-        Index("ix_tba_campaign", "campaign"),
     )
 
 

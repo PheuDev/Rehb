@@ -33,10 +33,9 @@ export async function deleteBrigadeEntity(id) {
 }
 
 // ── Affectations brigade → équipe ─────────────────────────────────────────────
-export async function assignBrigadeToTeam(brigadeId, teamId, campaign) {
+export async function assignBrigadeToTeam(brigadeId, teamId) {
   const { data } = await client.post(`/brigades/${brigadeId}/assign`, {
     team_id: teamId,
-    campaign,
   });
   return data;
 }
@@ -45,10 +44,13 @@ export async function removeAssignment(brigadeId, assignmentId) {
   await client.delete(`/brigades/${brigadeId}/assign/${assignmentId}`);
 }
 
-export async function listTeamBrigades(teamId, campaign) {
-  const { data } = await client.get(`/teams/${teamId}/brigades`, {
-    params: campaign ? { campaign } : {},
-  });
+export async function listTeamBrigades(teamId) {
+  const { data } = await client.get(`/teams/${teamId}/brigades`);
+  return data;
+}
+
+export async function listUnassignedBrigades() {
+  const { data } = await client.get("/brigades/unassigned");
   return data;
 }
 

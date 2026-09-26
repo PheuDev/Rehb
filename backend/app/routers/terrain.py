@@ -69,7 +69,6 @@ class BrigadeEntityOut(BaseModel):
 
 class AssignBrigadeRequest(BaseModel):
     team_id: int
-    campaign: str = Field(..., min_length=1, max_length=50, description="Ex : '2025'")
 
 
 class AssignmentOut(BaseModel):
@@ -78,7 +77,6 @@ class AssignmentOut(BaseModel):
     brigade_name: str
     team_id: int
     team_name: str
-    campaign: str
 
     class Config:
         from_attributes = True
@@ -214,6 +212,21 @@ def list_brigade_entities(
     return query.order_by(BrigadeEntity.name).all()
 
 
+@router.get("/api/brigades/unassigned", response_model=list[BrigadeEntityOut], summary="Brigades non encore affectées")
+def list_unassigned_brigades(
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Retourne les brigades qui ne sont affectées à aucune équipe."""
+    assigned_ids = db.query(TeamBrigadeAssignment.brigade_id).subquery()
+    return (
+        db.query(BrigadeEntity)
+        .filter(~BrigadeEntity.id.in_(assigned_ids))
+        .order_by(BrigadeEntity.name)
+        .all()
+    )
+
+
 @router.post(
     "/api/brigades",
     response_model=BrigadeEntityOut,
@@ -281,7 +294,7 @@ def delete_brigade_entity(
     "/api/brigades/{brigade_id}/assign",
     response_model=AssignmentOut,
     status_code=201,
-    summary="Affecter une brigade à une équipe pour une campagne",
+    summary="Affecter une brigade à une équipe",
 )
 def assign_brigade_to_team(
     brigade_id: int,
@@ -289,38 +302,26 @@ def assign_brigade_to_team(
     current_user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    """Affecte une brigade à une équipe pour une campagne donnée.
+    """Affecte une brigade à une équipe.
 
-    Règle métier : une brigade NE PEUT PAS être affectée à plusieurs équipes
-    dans la même campagne. La contrainte UNIQUE(brigade_id, campaign) en base
-    garantit cette règle même en cas de requêtes concurrentes.
+    Règle métier : une brigade ne peut être affectée qu'à une seule équipe.
+    La contrainte UNIQUE(brigade_id) en base garantit cette règle.
     """
     brigade = _brigade_or_404(db, brigade_id)
     team = db.query(Team).filter(Team.id == payload.team_id).first()
     if not team:
         raise HTTPException(404, "Équipe introuvable.")
 
-    # Vérification explicite pour un message d'erreur clair
-    existing = (
-        db.query(TeamBrigadeAssignment)
-        .filter(
-            TeamBrigadeAssignment.brigade_id == brigade_id,
-            TeamBrigadeAssignment.campaign == payload.campaign,
-        )
-        .first()
-    )
+    existing = db.query(TeamBrigadeAssignment).filter(
+        TeamBrigadeAssignment.brigade_id == brigade_id
+    ).first()
     if existing:
         raise HTTPException(
             409,
-            f"La brigade '{brigade.name}' est déjà affectée à une équipe "
-            f"pour la campagne '{payload.campaign}'.",
+            f"La brigade '{brigade.name}' est déjà affectée à l'équipe '{existing.team.name}'.",
         )
 
-    assignment = TeamBrigadeAssignment(
-        brigade_id=brigade_id,
-        team_id=payload.team_id,
-        campaign=payload.campaign,
-    )
+    assignment = TeamBrigadeAssignment(brigade_id=brigade_id, team_id=payload.team_id)
     db.add(assignment)
     db.commit()
     db.refresh(assignment)
@@ -330,7 +331,6 @@ def assign_brigade_to_team(
         brigade_name=brigade.name,
         team_id=payload.team_id,
         team_name=team.name,
-        campaign=payload.campaign,
     )
 
 
@@ -362,31 +362,16 @@ def remove_brigade_assignment(
 )
 def list_team_brigades(
     team_id: int,
-    campaign: Optional[str] = Query(None),
     current_user: User = Depends(require_active),
     db: Session = Depends(get_db),
 ):
-    # Un non-admin ne peut voir que son équipe
     if current_user.role != "admin" and current_user.team_id != team_id:
         raise HTTPException(403, "Accès refusé.")
-
-    query = db.query(TeamBrigadeAssignment).filter(
-        TeamBrigadeAssignment.team_id == team_id
-    )
-    if campaign:
-        query = query.filter(TeamBrigadeAssignment.campaign == campaign)
-
-    results = []
-    for a in query.all():
-        results.append(AssignmentOut(
-            id=a.id,
-            brigade_id=a.brigade_id,
-            brigade_name=a.brigade.name,
-            team_id=a.team_id,
-            team_name=a.team.name,
-            campaign=a.campaign,
-        ))
-    return results
+    return [
+        AssignmentOut(id=a.id, brigade_id=a.brigade_id, brigade_name=a.brigade.name,
+                      team_id=a.team_id, team_name=a.team.name)
+        for a in db.query(TeamBrigadeAssignment).filter(TeamBrigadeAssignment.team_id == team_id).all()
+    ]
 
 
 # =============================================================================
