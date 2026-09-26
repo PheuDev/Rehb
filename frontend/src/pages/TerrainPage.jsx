@@ -7,7 +7,7 @@
  *  3. Depuis une plantation (attribuée ou remplacement) → Créer une fiche d'audit
  */
 import { useEffect, useState, useCallback } from "react";
-import { Search, AlertTriangle, CheckCircle2, ArrowRight, Plus, RefreshCw, Download } from "lucide-react";
+import { Search, AlertTriangle, CheckCircle2, ArrowRight, Plus, RefreshCw, Download, Lock } from "lucide-react";
 import AppHeader from "../components/AppHeader.jsx";
 import Sidebar from "../components/Sidebar.jsx";
 import { Modal, Spinner, EmptyState } from "../components/ui.jsx";
@@ -17,6 +17,7 @@ import {
   listTeamPlantations,
   listAvailableReplacements,
   createReplacement,
+  deleteReplacement,
   listBinomeReplacements,
   exportBinomePlantationsExcel,
   exportTeamPlantationsExcel,
@@ -80,11 +81,15 @@ function ReplacementModal({ open, onClose, binomeId, originalPlantation, onSucce
     if (!open || !binomeId) return;
     setLoading(true);
     try {
-      const data = await listAvailableReplacements(binomeId, search ? { q: search } : {});
+      const params = {
+        brigade_id: originalPlantation?.brigade_id,
+        ...(search ? { q: search } : {}),
+      };
+      const data = await listAvailableReplacements(binomeId, params);
       setAvailable(data);
     } catch { setAvailable([]); }
     finally { setLoading(false); }
-  }, [open, binomeId, search]);
+  }, [open, binomeId, search, originalPlantation?.brigade_id]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -100,15 +105,29 @@ function ReplacementModal({ open, onClose, binomeId, originalPlantation, onSucce
     } finally { setSaving(false); }
   }
 
+  async function handleUnlock(replacement) {
+    setSaving(true);
+    setError("");
+    try {
+      await deleteReplacement(replacement.replacement_id);
+      await load();
+    } catch (err) {
+      setError(err?.response?.data?.detail || "Erreur lors du dégrisage.");
+    } finally { setSaving(false); }
+  }
+
   return (
     <Modal open={open} onClose={onClose}
       title={`Remplacement — ${originalPlantation?.pda_number || "plantation introuvable"}`}
       size="lg">
       <div className="space-y-4">
         <p className="text-sm text-gray-600">
-          Choisissez une plantation hors-échantillon pour remplacer{" "}
-          <strong>{originalPlantation?.pda_number || "cette plantation"}</strong>.
-          Une fois sélectionnée, elle sera verrouillée pour votre binôme.
+          Choisissez une autre plantation de la brigade{" "}
+          <strong>{originalPlantation?.brigade_name || "de cette plantation"}</strong>{" "}
+          (hors échantillon) pour remplacer{" "}
+          <strong>{originalPlantation?.pda_number || "cette plantation introuvable"}</strong>.
+          Une fois choisie, elle sera <strong>grisée</strong> : aucun autre binôme
+          ne pourra l'utiliser pour un autre remplacement.
         </p>
 
         <div className="relative">
@@ -124,25 +143,48 @@ function ReplacementModal({ open, onClose, binomeId, originalPlantation, onSucce
         {loading ? (
           <div className="flex justify-center py-8"><Spinner /></div>
         ) : available.length === 0 ? (
-          <EmptyState message="Aucune plantation de remplacement disponible." />
+          <EmptyState message="Aucune autre plantation de cette brigade hors échantillon." />
         ) : (
           <div className="max-h-80 overflow-y-auto space-y-2">
-            {available.map(p => (
-              <div key={p.id}
-                className="flex items-center justify-between rounded-lg border p-3 hover:bg-gray-50 cursor-pointer"
-                onClick={() => !saving && handleSelect(p)}>
-                <div>
-                  <p className="font-medium text-sm text-gray-800">
-                    {p.pda_number || <span className="italic text-gray-400">Sans N°PDA</span>}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {p.producer_name || "—"} · {[p.village, p.commune].filter(Boolean).join(", ") || "—"}
-                    {p.superficie && ` · ${p.superficie} ha`}
-                  </p>
+            {available.map(p => {
+              const locked = p.is_locked;
+              return (
+                <div key={p.id}
+                  className={`flex items-center justify-between rounded-lg border p-3 ${locked
+                    ? "bg-gray-50 opacity-70 cursor-not-allowed"
+                    : "cursor-pointer hover:bg-gray-50"}`}
+                  onClick={() => !saving && !locked && handleSelect(p)}>
+                  <div className="min-w-0">
+                    <p className={`text-sm ${locked ? "text-gray-500" : "font-medium text-gray-800"}`}>
+                      {p.pda_number || <span className="italic text-gray-400">Sans N°PDA</span>}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {p.producer_name || "—"} · {[p.village, p.commune].filter(Boolean).join(", ") || "—"}
+                      {p.superficie && ` · ${p.superficie} ha`}
+                    </p>
+                    {locked && (
+                      <p className="text-xs text-amber-700 mt-0.5">
+                        Grisée{p.locked_by_name ? ` par ${p.locked_by_name}` : ""}
+                        {p.locked_by_me ? " (par vous)" : " — remplacement d'un autre binôme"}
+                      </p>
+                    )}
+                  </div>
+                  {locked ? (
+                    p.locked_by_me ? (
+                      <button type="button" disabled={saving}
+                        className="btn-secondary text-xs px-2 py-1 shrink-0"
+                        onClick={(e) => { e.stopPropagation(); handleUnlock(p); }}>
+                        Dégriser
+                      </button>
+                    ) : (
+                      <Lock size={14} className="text-gray-400 shrink-0" />
+                    )
+                  ) : (
+                    <ArrowRight size={15} className="text-forest-600 shrink-0" />
+                  )}
                 </div>
-                <ArrowRight size={15} className="text-forest-600 shrink-0" />
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

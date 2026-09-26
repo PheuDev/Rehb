@@ -194,6 +194,10 @@ export async function createReplacement(originalId, replacementId) {
   return data;
 }
 
+export async function deleteReplacement(replacementId) {
+  await client.delete(`/replacements/${replacementId}`);
+}
+
 export async function listBinomeReplacements(binomeId) {
   const { data } = await client.get(`/binomes/${binomeId}/replacements`);
   return data;

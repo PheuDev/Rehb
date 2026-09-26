@@ -159,10 +159,14 @@ BASE_DDL = [
         replacement_plantation_id INTEGER NOT NULL REFERENCES plantations (id) ON DELETE CASCADE,
         binome_id                 INTEGER NOT NULL REFERENCES binomes     (id) ON DELETE CASCADE,
         locked_at                 TIMESTAMPTZ DEFAULT NOW(),
+        locked_by_id              INTEGER REFERENCES users (id) ON DELETE SET NULL,
         CONSTRAINT uq_replacement_plantation_unique UNIQUE (replacement_plantation_id)
     )""",
     "CREATE INDEX IF NOT EXISTS ix_rs_original ON replacement_selections (original_plantation_id)",
     "CREATE INDEX IF NOT EXISTS ix_rs_binome   ON replacement_selections (binome_id)",
+    # Migration : qui a grisé la plantation (dégrisage réservé au verrouilleur)
+    "ALTER TABLE replacement_selections ADD COLUMN IF NOT EXISTS locked_by_id INTEGER REFERENCES users (id) ON DELETE SET NULL",
+    "CREATE INDEX IF NOT EXISTS ix_rs_locked_by ON replacement_selections (locked_by_id)",
 
     # ------------------------------------------------------------------
     # Fiches de réhabilitation

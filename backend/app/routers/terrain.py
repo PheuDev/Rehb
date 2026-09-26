@@ -113,7 +113,11 @@ class PlantationOut(BaseModel):
     brigade_id: Optional[int]
     brigade_name: Optional[str] = None
     is_sample: bool
-    is_replaced: bool = False   # True si déjà choisie comme remplacement
+    is_replaced: bool = False   # True si une plantation de remplacement a été choisie
+    is_locked: bool = False     # True si utilisée comme remplacement (grisée)
+    locked_by_me: bool = False  # True si c'est l'utilisateur courant qui l'a grisée
+    locked_by_name: Optional[str] = None
+    replacement_id: Optional[int] = None  # id de la sélection (pour dégriser)
 
     class Config:
         from_attributes = True
@@ -143,6 +147,9 @@ class ReplacementOut(BaseModel):
     replacement_plantation_id: int
     binome_id: int
     locked_at: str
+    locked_by_id: Optional[int] = None
+    locked_by_name: Optional[str] = None
+    locked_by_me: bool = False
 
     class Config:
         from_attributes = True
@@ -173,12 +180,35 @@ def _binome_or_404(db: Session, binome_id: int) -> Binome:
     return b
 
 
-def _plantation_to_out(p: Plantation, db: Session) -> PlantationOut:
-    is_replaced = (
+def _plantation_to_out(
+    p: Plantation,
+    db: Session,
+    current_user: Optional[User] = None,
+) -> PlantationOut:
+    """Sérialise une plantation avec son état de remplacement.
+
+    - ``is_replaced`` : la plantation est l'ORIGINALE d'un remplacement
+      (badge « Remplacée » sur la fiche introuvable).
+    - ``is_locked`` : la plantation est UTILISÉE comme remplacement par
+      quelqu'un (elle apparaît grisée dans la liste des remplacements).
+    - ``locked_by_me`` / ``locked_by_name`` / ``replacement_id`` : éléments
+      pour le dégrisage (réservé au verrouilleur).
+    """
+    lock = (
         db.query(ReplacementSelection)
         .filter(ReplacementSelection.replacement_plantation_id == p.id)
         .first()
+    )
+    replaced = (
+        db.query(ReplacementSelection)
+        .filter(ReplacementSelection.original_plantation_id == p.id)
+        .first()
     ) is not None
+    locked_by_name = None
+    if lock:
+        locker = lock.locked_by
+        if locker:
+            locked_by_name = locker.full_name or locker.username
     return PlantationOut(
         id=p.id,
         pda_number=p.pda_number,
@@ -192,7 +222,11 @@ def _plantation_to_out(p: Plantation, db: Session) -> PlantationOut:
         brigade_id=p.brigade_id,
         brigade_name=p.brigade.name if p.brigade else None,
         is_sample=p.is_sample,
-        is_replaced=is_replaced,
+        is_replaced=replaced,
+        is_locked=lock is not None,
+        locked_by_me=bool(lock and current_user is not None and lock.locked_by_id == current_user.id),
+        locked_by_name=locked_by_name,
+        replacement_id=lock.id if lock else None,
     )
 
 
@@ -545,7 +579,7 @@ def list_binome_plantations(
         .filter(Plantation.id.in_(plantation_ids))
         .all()
     )
-    return [_plantation_to_out(p, db) for p in plantations]
+    return [_plantation_to_out(p, db, current_user) for p in plantations]
 
 
 @router.get(
@@ -691,7 +725,7 @@ def list_team_plantations(
         .order_by(Plantation.pda_number)
         .all()
     )
-    return [_plantation_to_out(p, db) for p in plantations]
+    return [_plantation_to_out(p, db, current_user) for p in plantations]
 
 
 @router.get(
@@ -804,24 +838,21 @@ def list_available_replacements(
     current_user: User = Depends(require_active),
     db: Session = Depends(get_db),
 ):
-    """Retourne les plantations hors-échantillon non encore verrouillées.
+    """Retourne les plantations hors-échantillon utilisables comme remplacement.
 
     Règles appliquées :
-    - is_sample = False  (pas de l'échantillon initial)
-    - Non utilisée comme remplacement par un autre binôme
-    - Filtrée sur les brigades de l'équipe du binôme connecté
+    - is_sample = False            (pas de l'échantillon initial / de la suggestion)
+    - Même brigade que la plantation introuvable (si brigade_id fourni)
+    - Plantations de l'équipe du binôme connecté (sauf admin)
+    - Les plantations déjà verrouillées (grisées) apparaissent avec
+      ``is_locked`` / ``locked_by_me`` afin d'éviter leur réutilisation.
     """
     if current_user.role == "binome" and current_user.binome_id != binome_id:
         raise HTTPException(403, "Accès refusé.")
 
-    # IDs déjà verrouillés comme remplacement
-    locked_ids = db.query(ReplacementSelection.replacement_plantation_id).subquery()
-
-    query = (
-        db.query(Plantation)
-        .filter(Plantation.is_sample.is_(False))
-        .filter(~Plantation.id.in_(locked_ids))
-    )
+    # Les plantations déjà verrouillées comme remplacement restent affichées
+    # (grisées) pour empêcher un autre binôme de les réutiliser.
+    query = db.query(Plantation).filter(Plantation.is_sample.is_(False))
 
     if brigade_id:
         query = query.filter(Plantation.brigade_id == brigade_id)
@@ -832,7 +863,6 @@ def list_available_replacements(
         brigade_ids = (
             db.query(TeamBrigadeAssignment.brigade_id)
             .filter(TeamBrigadeAssignment.team_id == binome.team_id)
-            .subquery()
         )
         query = query.filter(Plantation.brigade_id.in_(brigade_ids))
 
@@ -847,7 +877,7 @@ def list_available_replacements(
             )
         )
 
-    return [_plantation_to_out(p, db) for p in query.order_by(Plantation.pda_number).all()]
+    return [_plantation_to_out(p, db, current_user) for p in query.order_by(Plantation.pda_number).all()]
 
 
 @router.post(
@@ -867,8 +897,10 @@ def create_replacement(
     1. La plantation originale doit appartenir à l'échantillon (is_sample=True)
        ET être attribuée au binôme courant.
     2. La plantation de remplacement doit être hors-échantillon (is_sample=False).
-    3. La plantation de remplacement ne doit pas déjà être utilisée.
-    4. Un binôme ne peut remplacer que ses propres plantations.
+    3. La plantation de remplacement doit être de la MÊME brigade.
+    4. La plantation de remplacement ne doit pas déjà être verrouillée.
+    5. Un binôme ne peut remplacer que ses propres plantations.
+    Le verrou est attribué au binôme courant : seul lui pourra le dégriser.
     """
     if current_user.binome_id is None:
         raise HTTPException(400, "Votre compte n'est pas rattaché à un binôme.")
@@ -903,6 +935,14 @@ def create_replacement(
             "comme remplacement.",
         )
 
+    # Règle 2bis — le remplacement doit appartenir à la MÊME brigade
+    if original.brigade_id is not None and replacement.brigade_id != original.brigade_id:
+        raise HTTPException(
+            400,
+            "Le remplacement doit être une plantation de la même brigade "
+            "que la plantation introuvable.",
+        )
+
     # Règle 3 — non déjà verrouillée (vérification applicative avant la contrainte DB)
     already_locked = (
         db.query(ReplacementSelection)
@@ -924,6 +964,7 @@ def create_replacement(
             original_plantation_id=payload.original_plantation_id,
             replacement_plantation_id=payload.replacement_plantation_id,
             binome_id=current_user.binome_id,
+            locked_by_id=current_user.id,
         )
         db.add(sel)
         db.commit()
@@ -943,6 +984,9 @@ def create_replacement(
         replacement_plantation_id=sel.replacement_plantation_id,
         binome_id=sel.binome_id,
         locked_at=sel.locked_at.isoformat(),
+        locked_by_id=sel.locked_by_id,
+        locked_by_name=current_user.full_name or current_user.username,
+        locked_by_me=True,
     )
 
 
@@ -971,9 +1015,50 @@ def list_binome_replacements(
             replacement_plantation_id=s.replacement_plantation_id,
             binome_id=s.binome_id,
             locked_at=s.locked_at.isoformat(),
+            locked_by_id=s.locked_by_id,
+            locked_by_name=(
+                (s.locked_by.full_name or s.locked_by.username)
+                if s.locked_by else None
+            ),
+            locked_by_me=s.locked_by_id == current_user.id,
         )
         for s in selections
     ]
+
+
+@router.delete(
+    "/api/replacements/{replacement_id}",
+    status_code=200,
+    summary="Dégriser une plantation de remplacement (la libérer)",
+)
+def delete_replacement(
+    replacement_id: int,
+    current_user: User = Depends(require_active),
+    db: Session = Depends(get_db),
+):
+    """Libère une plantation de remplacement pour une future réutilisation.
+
+    Réservé à l'utilisateur qui l'a verrouillée (dégrisage) ; l'administrateur
+    dispose aussi de ce droit. La plantation introuvable redevient « non
+    remplacée ».
+    """
+    sel = (
+        db.query(ReplacementSelection)
+        .filter(ReplacementSelection.id == replacement_id)
+        .first()
+    )
+    if not sel:
+        raise HTTPException(404, "Remplacement introuvable.")
+
+    if current_user.role != "admin" and sel.locked_by_id != current_user.id:
+        raise HTTPException(
+            403,
+            "Seul le binôme qui a verrouillé ce remplacement peut le dégriser.",
+        )
+
+    db.delete(sel)
+    db.commit()
+    return {"message": "Remplacement dégrisé.", "replacement_id": replacement_id}
 
 
 # =============================================================================

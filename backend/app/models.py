@@ -360,7 +360,8 @@ class ReplacementSelection(Base):
 
     Règles métier garanties par les contraintes DB :
     - Une plantation de remplacement NE PEUT PAS être réutilisée :
-      UNIQUE(replacement_plantation_id).
+      UNIQUE(replacement_plantation_id). Elle est « grisée » — seul le
+      binôme qui l'a verrouillée (locked_by_id) peut la dégriser.
     - Deux binômes ne peuvent pas sélectionner la même plantation de remplacement
       simultanément (même contrainte UNIQUE).
     - Une plantation de l'échantillon initial NE PEUT PAS être un remplacement :
@@ -395,6 +396,14 @@ class ReplacementSelection(Base):
         server_default=func.now(),
         comment="Horodatage du verrouillage — empêche la sélection concurrente",
     )
+    # Utilisateur qui a verrouillé ce remplacement : seul lui peut le dégriser
+    locked_by_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="Utilisateur (binôme) qui a grisé la plantation de remplacement",
+    )
 
     original_plantation = relationship(
         "Plantation",
@@ -406,6 +415,7 @@ class ReplacementSelection(Base):
         back_populates="replacement_use",
     )
     binome = relationship("Binome")
+    locked_by = relationship("User", foreign_keys=[locked_by_id])
 
     __table_args__ = (
         # Garantit qu'une plantation de remplacement n'est utilisée qu'une seule fois
@@ -415,6 +425,7 @@ class ReplacementSelection(Base):
         ),
         Index("ix_rs_binome", "binome_id"),
         Index("ix_rs_original", "original_plantation_id"),
+        Index("ix_rs_locked_by", "locked_by_id"),
     )
 
 
