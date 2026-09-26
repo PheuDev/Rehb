@@ -634,20 +634,25 @@ def sync_brigades_from_fiches() -> None:
     supprimée. Le résultat sert ensuite au filtrage des fiches/plantations par
     équipe.
     """
-    if engine.dialect.name != "postgresql":
+    if not hasattr(engine, "dialect"):  # pragma: no cover - garde de sécurité
         return
 
-    inserted = _scalar(
-        "WITH known AS ("
-        "  SELECT DISTINCT btrim(brigade_name) AS name FROM rehabilitations "
-        "  WHERE brigade_name IS NOT NULL AND btrim(brigade_name) <> ''"
-        "), ins AS ("
-        "  INSERT INTO brigade_entities (name) "
-        "  SELECT k.name FROM known k "
-        "  WHERE NOT EXISTS (SELECT 1 FROM brigade_entities b WHERE b.name = k.name) "
-        "  RETURNING 1"
-        ") SELECT count(*) FROM ins"
-    )
+    # NOTE : écriture dans une transaction explicite (engine.begin()) pour que
+    # les INSERT soient bien commités — un SELECT isolé serait annulé à la
+    # fermeture de la connexion et les brigades disparaîtraient.
+    with engine.begin() as conn:
+        result = conn.execute(
+            text(
+                "INSERT INTO brigade_entities (name) "
+                "SELECT DISTINCT TRIM(brigade_name) FROM rehabilitations "
+                "WHERE brigade_name IS NOT NULL AND TRIM(brigade_name) <> '' "
+                "AND NOT EXISTS ("
+                "  SELECT 1 FROM brigade_entities b "
+                "  WHERE b.name = TRIM(brigade_name)"
+                ")"
+            )
+        )
+        inserted = result.rowcount or 0
     if inserted:
         logger.info("Brigades créées depuis les fiches existantes : %s.", inserted)
 
@@ -657,12 +662,12 @@ def sync_brigades_from_fiches() -> None:
         "SET manager_name  = COALESCE(b.manager_name,  src.mgr), "
         "    manager_phone = COALESCE(b.manager_phone, src.tel) "
         "FROM ("
-        "  SELECT btrim(brigade_name) AS name, "
+        "  SELECT TRIM(brigade_name) AS name, "
         "         max(brigade_manager_name)  AS mgr, "
         "         max(brigade_manager_phone) AS tel "
         "  FROM rehabilitations "
-        "  WHERE brigade_name IS NOT NULL AND btrim(brigade_name) <> '' "
-        "  GROUP BY btrim(brigade_name)"
+        "  WHERE brigade_name IS NOT NULL AND TRIM(brigade_name) <> '' "
+        "  GROUP BY TRIM(brigade_name)"
         ") AS src "
         "WHERE b.name = src.name AND (b.manager_name IS NULL OR b.manager_phone IS NULL)",
         "brigades → responsables",

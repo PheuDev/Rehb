@@ -19,9 +19,11 @@ import inspect
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import app.main as main
+from app.database import Base
 
 
 def _sqlite_engine():
@@ -113,3 +115,39 @@ def test_brigade_sync_is_purely_additive():
     assert "INSERT INTO brigade_entities" in code
     assert "DELETE" not in code
     assert "DROP " not in code
+
+
+def test_brigade_sync_commits_its_inserts(monkeypatch):
+    """Régression : les brigades créées doivent être COMMITÉES, pas annulées.
+
+    Exécuter l'INSERT dans `engine.connect()` le fait être rollback à la
+    fermeture de la connexion (SQLAlchemy 2.0) : la synchro semblait réussir
+    dans les logs mais la table restait vide côté API.
+    """
+    from app.models import BrigadeEntity, Rehabilitation
+
+    engine = _sqlite_engine()
+    monkeypatch.setattr(main, "engine", engine)
+    Base.metadata.create_all(engine)
+
+    with engine.begin() as conn:
+        conn.exec_driver_sql(
+            "INSERT INTO rehabilitations (pda_number, brigade_name, "
+            "brigade_manager_name, superficie_rehabilitee) "
+            "VALUES ('P1', '  Brigade du Nord  ', 'Moussa', 4)"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO rehabilitations (pda_number, brigade_name, "
+            "superficie_rehabilitee) VALUES ('P2', 'Brigade du Nord', 2)"
+        )
+
+    main.sync_brigades_from_fiches()
+
+    Session = sessionmaker(bind=engine, autoflush=False)
+    with Session() as db:
+        names = [b.name for b in db.query(BrigadeEntity).all()]
+        fiches = db.query(Rehabilitation).count()
+
+    # Un seul nom (espaces normalisés) et la donnée est bien persistée.
+    assert names == ["Brigade du Nord"]
+    assert fiches == 2
