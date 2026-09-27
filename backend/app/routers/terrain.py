@@ -113,6 +113,7 @@ class PlantationOut(BaseModel):
     superficie: Optional[float]
     brigade_id: Optional[int]
     brigade_name: Optional[str] = None
+    team_name: Optional[str] = None
     is_sample: bool
     inspection_completed: bool = False
     is_replaced: bool = False   # True si une plantation de remplacement a été choisie
@@ -547,7 +548,19 @@ def list_hors_echantillon_plantations(
         )
 
     plantations = query.order_by(Plantation.pda_number).all()
-    return [_plantation_to_out(p, db, current_user) for p in plantations]
+    brigade_ids = {p.brigade_id for p in plantations if p.brigade_id is not None}
+    team_by_brigade = {
+        assignment.brigade_id: assignment.team.name
+        for assignment in db.query(TeamBrigadeAssignment)
+        .filter(TeamBrigadeAssignment.brigade_id.in_(brigade_ids or {-1}))
+        .all()
+    }
+    result = []
+    for plantation in plantations:
+        item = _plantation_to_out(plantation, db, current_user)
+        item.team_name = team_by_brigade.get(plantation.brigade_id)
+        result.append(item)
+    return result
 
 
 @router.get(
@@ -557,6 +570,7 @@ def list_hors_echantillon_plantations(
 )
 def list_echantillon_plantations(
     brigade_id: Optional[int] = Query(None, description="Filtrer par brigade"),
+    q: Optional[str] = Query(None, description="Recherche N°PDA / producteur / commune / village"),
     include_replaced: bool = Query(False, description="Inclure les fiches déjà remplacées pour le suivi d'équipe"),
     current_user: User = Depends(require_active),
     db: Session = Depends(get_db),
@@ -589,6 +603,16 @@ def list_echantillon_plantations(
         query = query.filter(Plantation.brigade_id.in_(brigade_ids))
     if brigade_id is not None:
         query = query.filter(Plantation.brigade_id == brigade_id)
+    if q:
+        like = f"%{q}%"
+        query = query.filter(
+            or_(
+                Plantation.pda_number.ilike(like),
+                Plantation.producer_name.ilike(like),
+                Plantation.commune.ilike(like),
+                Plantation.village.ilike(like),
+            )
+        )
 
     if not include_replaced:
         replaced_ids = {
@@ -599,7 +623,19 @@ def list_echantillon_plantations(
             query = query.filter(~Plantation.id.in_(replaced_ids))
 
     plantations = query.order_by(Plantation.pda_number).all()
-    return [_plantation_to_out(p, db, current_user) for p in plantations]
+    brigade_ids = {p.brigade_id for p in plantations if p.brigade_id is not None}
+    team_by_brigade = {
+        assignment.brigade_id: assignment.team.name
+        for assignment in db.query(TeamBrigadeAssignment)
+        .filter(TeamBrigadeAssignment.brigade_id.in_(brigade_ids or {-1}))
+        .all()
+    }
+    result = []
+    for plantation in plantations:
+        item = _plantation_to_out(plantation, db, current_user)
+        item.team_name = team_by_brigade.get(plantation.brigade_id)
+        result.append(item)
+    return result
 
 
 @router.patch(

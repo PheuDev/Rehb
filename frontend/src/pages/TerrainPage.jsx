@@ -6,7 +6,7 @@
  *  2. Pour chaque plantation : signaler introuvable → choisir un remplacement
  *  3. Depuis une plantation (attribuée ou remplacement) → Créer une fiche d'audit
  */
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useSidebarState } from "../hooks/useSidebarState.js";
 import { Search, AlertTriangle, CheckCircle2, ArrowRight, Plus, RefreshCw, Download, Lock } from "lucide-react";
 import AppHeader from "../components/AppHeader.jsx";
@@ -14,6 +14,8 @@ import Sidebar from "../components/Sidebar.jsx";
 import { Modal, Spinner, EmptyState } from "../components/ui.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import {
+  listBrigadeEntities,
+  listEchantillonPlantations,
   listBiномePlantations,
   listTeamPlantations,
   listAvailableReplacements,
@@ -27,7 +29,7 @@ import { createRehabilitation, updateRehabilitation } from "../api/rehabilitatio
 import { linkFicheToPlantation } from "../api/terrain.js";
 
 // ─── Carte plantation ─────────────────────────────────────────────────────────
-function PlantationCard({ plantation, onSignal, onAudit, isReplacement = false, readOnly = false }) {
+function PlantationCard({ plantation, onSignal, onAudit, isReplacement = false, readOnly = false, showTeam = false }) {
   const replaced = plantation.is_replaced;
   return (
     <div className={`rounded-xl border bg-white p-3 space-y-2 sm:p-4 ${replaced ? "opacity-60" : ""}`}>
@@ -43,6 +45,12 @@ function PlantationCard({ plantation, onSignal, onAudit, isReplacement = false, 
           <p className="text-xs text-gray-400 mt-0.5">
             {[plantation.village, plantation.commune, plantation.departement].filter(Boolean).join(", ") || "Localisation inconnue"}
           </p>
+          {plantation.brigade_name && (
+            <p className="text-xs text-gray-500 mt-0.5">Brigade : {plantation.brigade_name}</p>
+          )}
+          {showTeam && (
+            <p className="text-xs text-gray-500 mt-0.5">Équipe : {plantation.team_name || "Non assignée"}</p>
+          )}
           {plantation.superficie && (
             <p className="text-xs text-gray-500 mt-0.5">{plantation.superficie} ha</p>
           )}
@@ -53,6 +61,18 @@ function PlantationCard({ plantation, onSignal, onAudit, isReplacement = false, 
           </span>
         )}
       </div>
+
+      {plantation.is_sample && (
+        <div className="border-t border-gray-100 pt-2">
+          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${plantation.is_replaced
+            ? "bg-amber-50 text-amber-700"
+            : plantation.inspection_completed
+              ? "bg-emerald-50 text-emerald-700"
+              : "bg-sky-50 text-sky-700"}`}>
+            {plantation.is_replaced ? "Remplacée" : plantation.inspection_completed ? "Inspection terminée" : "À inspecter"}
+          </span>
+        </div>
+      )}
 
       <div className="flex gap-2 pt-1">
         {!readOnly && !replaced && !isReplacement && (
@@ -332,36 +352,67 @@ export default function TerrainPage() {
   const [signalTarget, setSignalTarget] = useState(null);
   const [auditTarget, setAuditTarget] = useState(null);
   const [exporting, setExporting] = useState(false);
+  const [brigades, setBrigades] = useState([]);
+  const [selectedBrigadeId, setSelectedBrigadeId] = useState("");
+  const [search, setSearch] = useState("");
+  const loadRequestId = useRef(0);
 
-  const isBinome = user?.role === "binome";
+  const role = String(user?.role || "").trim().toLowerCase();
+  const isAdmin = role === "admin";
+  const isBinome = role === "binome";
   const binomeId = isBinome ? user?.binome_id : null;
   const teamId   = !isBinome ? user?.team_id : null;
 
   const loadData = useCallback(async () => {
-    if (!binomeId && !teamId) return;
+    if (!isAdmin && !binomeId && !teamId) return;
+    const requestId = ++loadRequestId.current;
     setLoading(true);
     try {
-      if (binomeId) {
+      if (isAdmin) {
+        const data = await listEchantillonPlantations({
+          include_replaced: true,
+          ...(selectedBrigadeId ? { brigade_id: selectedBrigadeId } : {}),
+          ...(search.trim() ? { q: search.trim() } : {}),
+        });
+        if (requestId === loadRequestId.current) {
+          setPlantations(data);
+          setReplacements([]);
+        }
+      } else if (binomeId) {
         const [p, r] = await Promise.all([
           listBiномePlantations(binomeId),
           listBinomeReplacements(binomeId),
         ]);
-        setPlantations(p);
-        setReplacements(r);
+        if (requestId === loadRequestId.current) {
+          setPlantations(p);
+          setReplacements(r);
+        }
       } else {
-        setPlantations(await listTeamPlantations(teamId));
-        setReplacements([]);
+        const data = await listTeamPlantations(teamId);
+        if (requestId === loadRequestId.current) {
+          setPlantations(data);
+          setReplacements([]);
+        }
       }
     } catch { /* erreur silencieuse */ }
-    finally { setLoading(false); }
-  }, [binomeId, teamId]);
+    finally {
+      if (requestId === loadRequestId.current) setLoading(false);
+    }
+  }, [isAdmin, binomeId, teamId, selectedBrigadeId, search]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    listBrigadeEntities()
+      .then((data) => setBrigades(data.map((b) => ({ id: b.brigade_id ?? b.id, name: b.brigade_name ?? b.name }))))
+      .catch(() => setBrigades([]));
+  }, [isAdmin]);
 
   // Plantations de remplacement enrichies
   const replacementPlantationIds = replacements.map(r => r.replacement_plantation_id);
 
-  if (!binomeId && !teamId) {
+  if (!isAdmin && !binomeId && !teamId) {
     return (
       <div className="min-h-screen bg-gray-50">
         <AppHeader />
@@ -388,11 +439,13 @@ export default function TerrainPage() {
               <p className="mt-0.5 text-xs text-gray-500 sm:mt-1 sm:text-sm">
                 {isBinome
                   ? "Plantations attribuées à votre binôme pour audit."
-                  : "Plantations reçues par votre équipe (brigades qui lui sont confiées)."}
+                  : isAdmin
+                    ? "Toutes les plantations échantillonnées, classées par brigade."
+                    : "Plantations reçues par votre équipe (brigades qui lui sont confiées)."}
               </p>
             </div>
             <div className="grid grid-cols-2 gap-2 sm:flex">
-              <button
+              {!isAdmin && <button
                 type="button"
                 className="btn-secondary min-h-10 px-2 text-xs sm:text-sm"
                 disabled={exporting || plantations.length === 0}
@@ -407,12 +460,29 @@ export default function TerrainPage() {
               >
                 {exporting ? <Spinner size={14} /> : <Download size={14} />}
                 Excel
-              </button>
+              </button>}
               <button type="button" aria-label="Actualiser les plantations" className="btn-secondary min-h-10 px-2 text-xs sm:text-sm" onClick={loadData}>
                 <RefreshCw size={14} /> Actualiser
               </button>
             </div>
           </div>
+
+          {isAdmin && (
+            <div className="grid gap-2 rounded-xl border border-gray-200 bg-white p-2.5 sm:flex sm:flex-wrap sm:items-center sm:gap-3 sm:p-3">
+              <label className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-2 text-xs text-gray-600 sm:flex sm:text-sm">
+                Brigade
+                <select className="input min-w-0 py-2" value={selectedBrigadeId} onChange={(e) => setSelectedBrigadeId(e.target.value)}>
+                  <option value="">Toutes les brigades</option>
+                  {brigades.map((brigade) => <option key={brigade.id} value={brigade.id}>{brigade.name}</option>)}
+                </select>
+              </label>
+              <div className="relative w-full sm:w-72">
+                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input className="input py-2 pl-9" placeholder="Rechercher PDA, producteur, commune…" value={search} onChange={(e) => setSearch(e.target.value)} />
+              </div>
+              <span className="text-xs text-gray-400 sm:ml-auto">{plantations.length} plantation(s)</span>
+            </div>
+          )}
 
           {loading ? (
             <div className="flex justify-center py-16"><Spinner size={32} /></div>
@@ -420,7 +490,9 @@ export default function TerrainPage() {
             <>
               {/* Plantations de l'échantillon */}
               {plantations.length === 0 ? (
-                <EmptyState message={isBinome
+                <EmptyState message={isAdmin
+                  ? "Aucune plantation échantillonnée pour ces critères."
+                  : isBinome
                   ? "Aucune plantation attribuée à votre binôme."
                   : "Aucune plantation reçue par votre équipe pour l'instant."} />
               ) : (
@@ -428,6 +500,7 @@ export default function TerrainPage() {
                   {plantations.map(p => (
                     <PlantationCard key={p.id} plantation={p}
                       readOnly={!isBinome}
+                      showTeam={isAdmin}
                       onSignal={setSignalTarget}
                       onAudit={setAuditTarget} />
                   ))}

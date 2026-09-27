@@ -69,7 +69,7 @@ export default function PlantationsHorsEchantillonPage() {
         : user?.team_id ? await listTeamBrigades(user.team_id) : [];
       const norm = raw.map((b) => ({ id: b.brigade_id ?? b.id, name: b.brigade_name ?? b.name }));
       setBrigades(norm);
-      if (norm.length > 0) setSelectedBrigadeId((prev) => prev || String(norm[0].id));
+      if (!isAdmin && norm.length > 0) setSelectedBrigadeId((prev) => prev || String(norm[0].id));
     } catch { /* silencieux */ }
   }, [isAdmin, user?.team_id]);
 
@@ -160,7 +160,9 @@ export default function PlantationsHorsEchantillonPage() {
             <div>
               <h2 className="text-lg font-semibold text-gray-900 sm:text-xl">Hors échantillon</h2>
               <p className="mt-0.5 text-xs text-gray-500 sm:mt-1 sm:text-sm">
-                Fiches de la feuille hors-échantillon de la dernière suggestion enregistrée.
+                {isAdmin
+                  ? "Toutes les fiches hors-échantillon, avec filtre par brigade."
+                  : "Fiches de la feuille hors-échantillon de la dernière suggestion enregistrée."}{" "}
                 Marquez une fiche comme utilisée pour remplacer une fiche échantillonnée de la même brigade.
               </p>
             </div>
