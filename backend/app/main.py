@@ -811,6 +811,14 @@ def _sync_saved_hors_echantillon_plantations() -> None:
         logger.info("Plantations hors-échantillon créées depuis les suggestions : %s.", count)
 
 
+def _sync_saved_sample_plantations() -> None:
+    from app.crud import sync_saved_sample_plantations
+
+    count = sync_saved_sample_plantations()
+    if count:
+        logger.info("Plantations échantillonnées manquantes recréées depuis les suggestions : %s.", count)
+
+
 # Étapes de démarrage : chaque étape est isolée. Un problème de schéma
 # (table déjà existante, doublon, privilège manquant…) est logué mais ne doit
 # JAMAIS empêcher l'API de démarrer — c'est ce qui provoquait l'échec de
@@ -825,6 +833,7 @@ STARTUP_STEPS = (
     ("affectations brigade → équipe", migrate_assignments_schema),
     ("brigades issues des fiches existantes", sync_brigades_from_fiches),
     ("plantations hors-échantillon des suggestions", _sync_saved_hors_echantillon_plantations),
+    ("plantations échantillonnées des suggestions", _sync_saved_sample_plantations),
     ("vue de synthèse", _rebuild_view),
     ("compte administrateur par défaut", _seed_default_admin),
 )

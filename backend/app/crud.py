@@ -995,6 +995,79 @@ def sync_saved_hors_echantillon_plantations() -> int:
         db.close()
 
 
+def sync_saved_sample_plantations() -> int:
+    """Crée les lignes terrain manquantes pour tous les échantillons sauvegardés.
+
+    La liste admin se base sur les plantations matérialisées. Ce rattrapage
+    rend aussi visibles les fiches sauvegardées avant que leur brigade soit
+    rattachée à une équipe, sans réinitialiser l'état d'inspection existant.
+    """
+    from app.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        suggestions = db.query(SavedAuditSuggestion).order_by(
+            SavedAuditSuggestion.created_at.asc(), SavedAuditSuggestion.id.asc()
+        ).all()
+        fiches = [
+            fiche
+            for suggestion in suggestions
+            for fiche in ((suggestion.snapshot or {}).get("fiches") or [])
+        ]
+        _ensure_brigade_entities_from_names([
+            (fiche.get("brigade_name") or "").strip()
+            for fiche in fiches
+            if (fiche.get("brigade_name") or "").strip()
+        ])
+
+        rehab_ids = {fiche.get("id") for fiche in fiches if fiche.get("id") is not None}
+        existing_ids = {
+            rehab_id
+            for (rehab_id,) in db.query(Plantation.source_rehabilitation_id)
+            .filter(
+                Plantation.is_sample.is_(True),
+                Plantation.source_rehabilitation_id.in_(rehab_ids or {-1}),
+            )
+            .all()
+        }
+        brigades = {b.name.casefold(): b for b in db.query(BrigadeEntity).all()}
+        created = 0
+        for fiche in fiches:
+            rehab_id = fiche.get("id")
+            if rehab_id is None or rehab_id in existing_ids:
+                continue
+
+            brigade_name = (fiche.get("brigade_name") or "").strip()
+            brigade = brigades.get(brigade_name.casefold()) if brigade_name else None
+            plantation = Plantation(
+                pda_number=fiche.get("pda_number"),
+                producer_name=fiche.get("producer_name"),
+                departement=fiche.get("departement"),
+                commune=fiche.get("commune"),
+                arrondissement=fiche.get("arrondissement"),
+                village=fiche.get("village"),
+                superficie=fiche.get("superficie_rehabilitee"),
+                brigade_id=brigade.id if brigade else None,
+                is_sample=True,
+                source_rehabilitation_id=rehab_id,
+            )
+            db.add(plantation)
+            existing_ids.add(rehab_id)
+            rehab = db.query(Rehabilitation).filter(Rehabilitation.id == rehab_id).first()
+            if rehab and rehab.plantation_id is None:
+                db.flush()
+                rehab.plantation_id = plantation.id
+            created += 1
+
+        db.commit()
+        return created
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
 def dispatch_audit_suggestion_to_teams(
     db: Session,
     suggestion_id: int,
@@ -1041,23 +1114,21 @@ def dispatch_audit_suggestion_to_teams(
         rehab_id = fiche.get("id")
         bname = (fiche.get("brigade_name") or "").strip()
         if not bname:
-            stats["warnings"].append(f"Fiche {rehab_id or '?'} : brigade absente — ignorée.")
-            continue
-
-        brigade = brigade_by_name.get(bname) or brigade_by_lower.get(bname.lower())
-        if not brigade:
+            brigade = None
+            stats["warnings"].append(f"Fiche {rehab_id or '?'} : brigade absente — visible par l'administration uniquement.")
+        else:
+            brigade = brigade_by_name.get(bname) or brigade_by_lower.get(bname.lower())
+        if bname and not brigade:
             stats["warnings"].append(f"Brigade « {bname} » introuvable dans le référentiel.")
-            continue
 
-        team_id = team_by_brigade.get(brigade.id)
+        team_id = team_by_brigade.get(brigade.id) if brigade else None
         if not team_id:
             stats["warnings"].append(
-                f"Brigade « {bname} » n'est affectée à aucune équipe (Administration → Affectations)."
+                f"Brigade « {bname or 'sans nom'} » n'est affectée à aucune équipe : la fiche reste visible par l'administration uniquement."
             )
-            continue
 
-        binome_ids = binomes_by_team.get(team_id) or []
-        if not binome_ids:
+        binome_ids = binomes_by_team.get(team_id, []) if team_id else []
+        if team_id and not binome_ids:
             team_label = teams[team_id].name if team_id in teams else f"#{team_id}"
             stats["warnings"].append(
                 f"Équipe « {team_label} » : aucun binôme — "
@@ -1100,23 +1171,24 @@ def dispatch_audit_suggestion_to_teams(
             if rehab and rehab.plantation_id != plantation.id:
                 rehab.plantation_id = plantation.id
 
-        team_audit = (
-            db.query(TeamAuditAssignment)
-            .filter(
-                TeamAuditAssignment.team_id == team_id,
-                TeamAuditAssignment.plantation_id == plantation.id,
-            )
-            .first()
-        )
-        if not team_audit:
-            db.add(
-                TeamAuditAssignment(
-                    audit_suggestion_id=suggestion_id,
-                    team_id=team_id,
-                    plantation_id=plantation.id,
-                    rehabilitation_id=rehab_id,
+        if team_id:
+            team_audit = (
+                db.query(TeamAuditAssignment)
+                .filter(
+                    TeamAuditAssignment.team_id == team_id,
+                    TeamAuditAssignment.plantation_id == plantation.id,
                 )
+                .first()
             )
+            if not team_audit:
+                db.add(
+                    TeamAuditAssignment(
+                        audit_suggestion_id=suggestion_id,
+                        team_id=team_id,
+                        plantation_id=plantation.id,
+                        rehabilitation_id=rehab_id,
+                    )
+                )
 
         for binome_id in binome_ids:
             exists = (
@@ -1131,13 +1203,14 @@ def dispatch_audit_suggestion_to_teams(
                 db.add(SampleAssignment(plantation_id=plantation.id, binome_id=binome_id))
                 stats["binome_assignments_created"] += 1
 
-        stats["fiches_dispatched"] += 1
-        team_name = teams[team_id].name if team_id in teams else f"Équipe #{team_id}"
-        bucket = stats["teams"].setdefault(
-            team_id,
-            {"team_id": team_id, "team_name": team_name, "fiches": 0, "binomes": len(binome_ids)},
-        )
-        bucket["fiches"] += 1
+        if team_id:
+            stats["fiches_dispatched"] += 1
+            team_name = teams[team_id].name if team_id in teams else f"Équipe #{team_id}"
+            bucket = stats["teams"].setdefault(
+                team_id,
+                {"team_id": team_id, "team_name": team_name, "fiches": 0, "binomes": len(binome_ids)},
+            )
+            bucket["fiches"] += 1
 
     db.flush()
     stats["teams"] = list(stats["teams"].values())

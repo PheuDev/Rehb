@@ -126,10 +126,12 @@ export default function AuditSuperficiePage() {
       setSaveTitle("");
       setSaveDispatch(saved.dispatch || null);
       const dispatched = saved.dispatch?.fiches_dispatched ?? 0;
+      const samplePlantations = (saved.dispatch?.plantations_created ?? 0)
+        + (saved.dispatch?.plantations_reused ?? 0);
       setSaveSuccess(
-        dispatched > 0
-          ? `Suggestion enregistrée — ${dispatched} fiche(s) envoyée(s) aux équipes concernées (Mes plantations).`
-          : "Suggestion enregistrée. Aucune fiche distribuée : vérifiez les affectations brigade → équipe et les binômes.",
+        samplePlantations > 0
+          ? `Suggestion enregistrée — ${samplePlantations} plantation(s) échantillonnée(s) disponible(s) dans Mes plantations${dispatched > 0 ? `, dont ${dispatched} distribuée(s) aux équipes.` : "."}`
+          : "Suggestion enregistrée, mais elle ne contient aucune plantation échantillonnée à afficher.",
       );
     } catch {
       setError("Impossible d'enregistrer la suggestion.");
