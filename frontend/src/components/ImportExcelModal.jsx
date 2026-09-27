@@ -69,7 +69,7 @@ export default function ImportExcelModal({ open, onClose, onImported }) {
         </div>
 
         <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-300 p-6 text-center hover:border-forest-400">
-          <UploadCloud className="text-gray-400" size={28} />
+          <UploadCloud className="text-gray-500" size={28} />
           <span className="text-sm text-gray-600">
             {file ? file.name : "Cliquez pour choisir un fichier .xlsx"}
           </span>

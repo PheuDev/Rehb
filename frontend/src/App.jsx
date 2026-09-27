@@ -1,26 +1,45 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { Suspense, lazy } from "react";
 import { AuthProvider } from "./context/AuthContext.jsx";
 import PrivateRoute from "./components/PrivateRoute.jsx";
+import { Skeleton } from "./components/ui.jsx";
 
+// ── Chargement différé des pages : allège le bundle initial (Chart.js n'est
+//    téléchargé que si l'utilisateur ouvre le Dashboard, etc.). ──
 import LoginPage from "./pages/LoginPage.jsx";
-import RehabilitationsPage from "./pages/RehabilitationsPage.jsx";
-import BrigadesPage from "./pages/BrigadesPage.jsx";
-import DashboardPage from "./pages/DashboardPage.jsx";
-import ProducersPage from "./pages/ProducersPage.jsx";
-import DepartementsPage from "./pages/DepartementsPage.jsx";
-import AuditSuperficiePage from "./pages/AuditSuperficiePage.jsx";
-import FichesAuditPage from "./pages/FichesAuditPage.jsx";
-import AdminPage from "./pages/AdminPage.jsx";
-import TerrainPage from "./pages/TerrainPage.jsx";
-import MesFichesPage from "./pages/MesFichesPage.jsx";
-import PlantationsHorsEchantillonPage from "./pages/PlantationsHorsEchantillonPage.jsx";
-import MesBrigadesPage from "./pages/MesBrigadesPage.jsx";
-import MonEquipePage from "./pages/MonEquipePage.jsx";
+const RehabilitationsPage = lazy(() => import("./pages/RehabilitationsPage.jsx"));
+const BrigadesPage = lazy(() => import("./pages/BrigadesPage.jsx"));
+const DashboardPage = lazy(() => import("./pages/DashboardPage.jsx"));
+const ProducersPage = lazy(() => import("./pages/ProducersPage.jsx"));
+const DepartementsPage = lazy(() => import("./pages/DepartementsPage.jsx"));
+const AuditSuperficiePage = lazy(() => import("./pages/AuditSuperficiePage.jsx"));
+const FichesAuditPage = lazy(() => import("./pages/FichesAuditPage.jsx"));
+const AdminPage = lazy(() => import("./pages/AdminPage.jsx"));
+const TerrainPage = lazy(() => import("./pages/TerrainPage.jsx"));
+const MesFichesPage = lazy(() => import("./pages/MesFichesPage.jsx"));
+const PlantationsHorsEchantillonPage = lazy(() => import("./pages/PlantationsHorsEchantillonPage.jsx"));
+const MesBrigadesPage = lazy(() => import("./pages/MesBrigadesPage.jsx"));
+const MonEquipePage = lazy(() => import("./pages/MonEquipePage.jsx"));
+
+/** Écran d'attente pendant le téléchargement d'un chunk de page. */
+function PageFallback() {
+  return (
+    <div className="min-h-[100dvh] bg-gray-50" role="status" aria-live="polite">
+      <span className="sr-only">Chargement de la page…</span>
+      <div className="mx-auto max-w-7xl space-y-4 px-4 py-6 sm:px-6">
+        <Skeleton className="h-12 w-64 rounded-xl" />
+        <Skeleton className="h-24 rounded-xl" />
+        <Skeleton className="h-64 rounded-xl" />
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <Suspense fallback={<PageFallback />}>
         <Routes>
           {/* ── Route publique ── */}
           <Route path="/login" element={<LoginPage />} />
@@ -71,6 +90,7 @@ export default function App() {
           {/* ── Fallback ── */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </Suspense>
       </AuthProvider>
     </BrowserRouter>
   );

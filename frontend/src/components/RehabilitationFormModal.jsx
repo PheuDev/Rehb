@@ -121,7 +121,7 @@ function SectionNav({ currentIndex, furthestIndex, stepHasError, onJump }) {
                   ? "border-white text-white"
                   : isDone
                   ? "border-forest-600 bg-forest-50 text-forest-700"
-                  : "border-gray-300 text-gray-400"
+                  : "border-gray-300 text-gray-500"
               }`}
             >
               {isDone ? <Check size={13} /> : index + 1}

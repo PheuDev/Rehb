@@ -134,7 +134,7 @@ export default function Sidebar({ onClose }) {
       />
     <aside
       aria-label="Navigation principale"
-      className="fixed inset-y-0 left-0 z-50 flex h-screen w-[min(18rem,calc(100vw-2rem))] shrink-0 flex-col overflow-hidden border-r border-gray-200 bg-white shadow-xl lg:sticky lg:top-6 lg:h-[calc(100vh-3rem)] lg:max-h-[calc(100vh-3rem)] lg:w-64 lg:self-start lg:rounded-2xl lg:border lg:shadow-md"
+      className="fixed inset-y-0 left-0 z-50 flex h-[100dvh] w-[min(18rem,calc(100vw-2rem))] shrink-0 flex-col overflow-hidden border-r border-gray-200 bg-white shadow-xl lg:sticky lg:top-20 lg:h-[calc(100dvh-6rem)] lg:max-h-[calc(100dvh-6rem)] lg:w-64 lg:self-start lg:rounded-2xl lg:border lg:shadow-md"
     >
 
       {/* ── En-tête ────────────────────────────────────────────── */}
@@ -149,7 +149,7 @@ export default function Sidebar({ onClose }) {
           type="button"
           onClick={onClose}
           aria-label="Replier le menu"
-          className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-forest-500"
+          className="flex h-10 w-10 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
           title="Replier le menu"
         >
           <ChevronLeft size={17} />
@@ -161,7 +161,7 @@ export default function Sidebar({ onClose }) {
         {visibleSections.map((section, si) => (
           <div key={si}>
             {section.label && (
-              <p className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+              <p className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-widest text-gray-500">
                 {section.label}
               </p>
             )}
@@ -178,7 +178,7 @@ export default function Sidebar({ onClose }) {
 
       {/* ── Footer ─────────────────────────────────────────────── */}
       <div className="border-t border-gray-100 px-4 py-3">
-        <p className="text-[11px] text-gray-400 leading-snug">
+        <p className="text-[11px] leading-snug text-gray-500">
           Gestion des réhabilitations forestières
         </p>
       </div>

@@ -1,4 +1,4 @@
-﻿import { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useSidebarState } from "../hooks/useSidebarState.js";
 import {
   ArrowLeft, BarChart3, ChevronDown, ChevronUp, ChevronsUpDown,
@@ -8,7 +8,7 @@ import { useNavigate } from "react-router-dom";
 
 import AppHeader from "../components/AppHeader.jsx";
 import Sidebar from "../components/Sidebar.jsx";
-import { Spinner } from "../components/ui.jsx";
+import { Spinner, SkeletonTable } from "../components/ui.jsx";
 import { getAuditSample, exportAuditExcel, saveAuditSuggestion } from "../api/rehabilitations.js";
 import { formatNumber } from "../utils/format.js";
 
@@ -19,7 +19,7 @@ function Th({ label, field, sortKey, sortDir, onSort, className = "" }) {
   return (
     <th
       onClick={() => onSort(field)}
-      className={`cursor-pointer select-none whitespace-nowrap px-3 py-2.5 text-left text-xs font-medium text-gray-400 hover:text-gray-700 ${className}`}
+      className={`cursor-pointer select-none whitespace-nowrap px-3 py-2.5 text-left text-xs font-medium text-gray-500 hover:text-gray-700 ${className}`}
     >
       <span className="inline-flex items-center gap-1">
         {label}
@@ -202,13 +202,13 @@ export default function AuditSuperficiePage() {
           {/* Breadcrumb + titre + actions — tout sur une ligne */}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <button onClick={() => navigate("/")} className="text-gray-400 hover:text-gray-700 transition-colors" title="Retour">
+              <button onClick={() => navigate("/")} className="text-gray-500 hover:text-gray-700 transition-colors" title="Retour">
                 <ArrowLeft size={18} />
               </button>
               <div className="flex items-center gap-2">
                 <ClipboardCheck size={18} className="text-violet-500" />
                 <h2 className="text-lg font-semibold text-gray-900">Superficie à Auditer</h2>
-                <span className="hidden sm:inline text-xs text-gray-400">
+                <span className="hidden sm:inline text-xs text-gray-500">
                   — {customMode ? `${pctGlobal}% global · ${pctBrigade}% fiches/brigade` : "25% global · 20% fiches/brigade"}
                 </span>
               </div>
@@ -306,7 +306,7 @@ export default function AuditSuperficiePage() {
                         value={pctGlobal}
                         onChange={(e) => setPctGlobal(Number(e.target.value) || 1)}
                       />
-                      <span className="text-sm text-gray-400">% (25 % par défaut)</span>
+                      <span className="text-sm text-gray-500">% (25 % par défaut)</span>
                     </div>
                   </label>
                   <label className="block space-y-1">
@@ -321,7 +321,7 @@ export default function AuditSuperficiePage() {
                         value={pctBrigade}
                         onChange={(e) => setPctBrigade(Number(e.target.value) || 1)}
                       />
-                      <span className="text-sm text-gray-400">% (20 % par défaut)</span>
+                      <span className="text-sm text-gray-500">% (20 % par défaut)</span>
                     </div>
                   </label>
                 </div>
@@ -339,7 +339,7 @@ export default function AuditSuperficiePage() {
                 </button>
               )}
 
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-gray-500">
                 Une plantation ne peut être suggérée qu'une seule fois : une même fiche ne
                 peut pas être re-citée dans la même séquence de suggestion.
               </p>
@@ -381,7 +381,7 @@ export default function AuditSuperficiePage() {
           )}
 
           {/* Chargement */}
-          {loading && <div className="flex items-center justify-center py-32"><Spinner size={32} /></div>}
+          {loading && <SkeletonTable rows={5} columns={5} />}
 
           {/* État vide */}
           {!result && !loading && !error && (
@@ -391,7 +391,7 @@ export default function AuditSuperficiePage() {
               </div>
               <div>
                 <p className="font-medium text-gray-700">Aucun échantillon généré</p>
-                <p className="mt-0.5 text-sm text-gray-400 max-w-sm">
+                <p className="mt-0.5 text-sm text-gray-500 max-w-sm">
                   Cliquez sur "Nouvelle suggestion (règle par défaut)" ou sur
                   "Suggestion personnalisée" pour lancer un tirage aléatoire.
                 </p>
@@ -412,7 +412,7 @@ export default function AuditSuperficiePage() {
                   <div key={label} className="rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm flex items-center gap-3">
                     <Icon size={18} className={`shrink-0 ${accent}`} />
                     <div className="min-w-0">
-                      <p className="text-xs text-gray-400 truncate">{label}</p>
+                      <p className="text-xs text-gray-500 truncate">{label}</p>
                       <p className="text-lg font-bold text-gray-900 leading-tight">{value}</p>
                     </div>
                   </div>
@@ -429,7 +429,7 @@ export default function AuditSuperficiePage() {
                       Brigades
                       {hasFilter && <span className="ml-1.5 badge bg-violet-100 text-violet-600 normal-case font-normal">{selectedBrigades.length}</span>}
                     </p>
-                    <div className="flex gap-2 text-xs text-gray-400">
+                    <div className="flex gap-2 text-xs text-gray-500">
                       <button onClick={() => setSelectedBrigades([])} className="hover:text-forest-600 transition-colors">Toutes</button>
                       <span>·</span>
                       <button onClick={() => setSelectedBrigades([...allBrigades])} className="hover:text-gray-700 transition-colors">Aucune</button>
@@ -454,7 +454,7 @@ export default function AuditSuperficiePage() {
                           className={`inline-flex items-center gap-0.5 rounded-md px-2 py-0.5 text-xs border transition-colors ${
                             active
                               ? "bg-forest-600 text-white border-forest-600"
-                              : "bg-white text-gray-400 border-gray-200 hover:border-gray-400"
+                              : "bg-white text-gray-500 border-gray-200 hover:border-gray-400"
                           }`}
                         >
                           {name}
@@ -473,10 +473,10 @@ export default function AuditSuperficiePage() {
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="bg-gray-50 border-b border-gray-100">
-                        <th className="px-4 py-2 text-left font-medium text-gray-400">Classe</th>
-                        <th className="px-3 py-2 text-center font-medium text-gray-400">Fiches</th>
-                        <th className="px-3 py-2 text-center font-medium text-gray-400">Superficie</th>
-                        <th className="px-3 py-2 text-center font-medium text-gray-400">Brigades</th>
+                        <th className="px-4 py-2 text-left font-medium text-gray-500">Classe</th>
+                        <th className="px-3 py-2 text-center font-medium text-gray-500">Fiches</th>
+                        <th className="px-3 py-2 text-center font-medium text-gray-500">Superficie</th>
+                        <th className="px-3 py-2 text-center font-medium text-gray-500">Brigades</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
@@ -500,7 +500,7 @@ export default function AuditSuperficiePage() {
                     Fiches à inspecter
                   </p>
                   <span className="badge bg-violet-100 text-violet-600 text-xs">{sortedFiches.length}</span>
-                  {hasFilter && <span className="text-xs text-gray-400">/ {result.total_fiches} total</span>}
+                  {hasFilter && <span className="text-xs text-gray-500">/ {result.total_fiches} total</span>}
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -528,7 +528,7 @@ export default function AuditSuperficiePage() {
                           <td className="px-3 py-2.5 font-medium text-gray-700 text-sm">
                             {f.superficie_rehabilitee != null ? `${formatNumber(f.superficie_rehabilitee)} ha` : "—"}
                           </td>
-                          <td className="px-3 py-2.5 text-gray-400 text-sm">{f.annee_rehabilitation ?? "—"}</td>
+                          <td className="px-3 py-2.5 text-gray-500 text-sm">{f.annee_rehabilitation ?? "—"}</td>
                         </tr>
                       ))}
                     </tbody>

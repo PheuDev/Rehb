@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { MapPin, RefreshCw, Users } from "lucide-react";
 import AppHeader from "../components/AppHeader.jsx";
 import Sidebar from "../components/Sidebar.jsx";
-import { EmptyState, Spinner } from "../components/ui.jsx";
+import { EmptyState, SkeletonCards } from "../components/ui.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { listTeamBrigades } from "../api/terrain.js";
 import { useSidebarState } from "../hooks/useSidebarState.js";
@@ -50,7 +50,7 @@ export default function MesBrigadesPage() {
           </div>
 
           {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
-          {loading ? <Spinner /> : brigades.length === 0 ? (
+          {loading ? <SkeletonCards count={6} /> : brigades.length === 0 ? (
             <EmptyState message="Aucune brigade affectée à votre équipe pour le moment." />
           ) : (
             <>

@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { TreeDeciduous, Eye, EyeOff, LogIn } from "lucide-react";
 import { useAuth } from "../context/AuthContext.jsx";
+import { APP_NAME } from "../components/AppHeader.jsx";
 
 export default function LoginPage() {
   const { loginFn } = useAuth();
@@ -14,6 +15,10 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    document.title = `Connexion · ${APP_NAME}`;
+  }, []);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -33,7 +38,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
+    <div className="flex min-h-[100dvh] items-center justify-center bg-gray-50 px-4 py-8">
       <div className="w-full max-w-sm">
 
         {/* ── Logo ──────────────────────────────────────────────── */}
@@ -72,7 +77,7 @@ export default function LoginPage() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="input"
-                placeholder="ex : jean.dupont"
+                placeholder=""
               />
             </div>
 
@@ -95,7 +100,7 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  className="absolute right-1 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700"
                   tabIndex={-1}
                   aria-label={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
                 >

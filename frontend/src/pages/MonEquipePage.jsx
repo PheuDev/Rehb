@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Circle, RefreshCw, Users } from "lucide-react";
 import AppHeader from "../components/AppHeader.jsx";
 import Sidebar from "../components/Sidebar.jsx";
-import { EmptyState, Spinner } from "../components/ui.jsx";
+import { EmptyState, SkeletonCards } from "../components/ui.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import {
   getTeam,
@@ -92,7 +92,7 @@ export default function MonEquipePage() {
           </div>
 
           {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
-          {loading ? <Spinner /> : !user?.team_id ? (
+          {loading ? <SkeletonCards count={4} /> : !user?.team_id ? (
             <EmptyState message="Votre compte n’est pas encore rattaché à une équipe." />
           ) : team && (
             <>

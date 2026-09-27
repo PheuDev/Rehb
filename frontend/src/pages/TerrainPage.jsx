@@ -11,7 +11,7 @@ import { useSidebarState } from "../hooks/useSidebarState.js";
 import { Search, AlertTriangle, CheckCircle2, ArrowRight, Plus, RefreshCw, Download, Lock } from "lucide-react";
 import AppHeader from "../components/AppHeader.jsx";
 import Sidebar from "../components/Sidebar.jsx";
-import { Modal, Spinner, EmptyState } from "../components/ui.jsx";
+import { Modal, Spinner, EmptyState, SkeletonCards, SkeletonTable } from "../components/ui.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import {
   listBrigadeEntities,
@@ -36,13 +36,13 @@ function PlantationCard({ plantation, onSignal, onAudit, isReplacement = false, 
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="font-semibold text-gray-800">
-            {plantation.pda_number || <span className="italic text-gray-400">Sans N°PDA</span>}
+            {plantation.pda_number || <span className="italic text-gray-500">Sans N°PDA</span>}
             {isReplacement && (
               <span className="ml-2 text-xs font-medium text-amber-700 bg-amber-100 rounded-full px-2 py-0.5">Remplacement</span>
             )}
           </p>
           <p className="text-sm text-gray-600">{plantation.producer_name || "—"}</p>
-          <p className="text-xs text-gray-400 mt-0.5">
+          <p className="text-xs text-gray-500 mt-0.5">
             {[plantation.village, plantation.commune, plantation.departement].filter(Boolean).join(", ") || "Localisation inconnue"}
           </p>
           {plantation.brigade_name && (
@@ -152,7 +152,7 @@ function ReplacementModal({ open, onClose, binomeId, originalPlantation, onSucce
         </p>
 
         <div className="relative">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
           <input className="input pl-9" placeholder="Rechercher par N°PDA, producteur, commune…"
             value={search} onChange={e => setSearch(e.target.value)} />
         </div>
@@ -162,7 +162,7 @@ function ReplacementModal({ open, onClose, binomeId, originalPlantation, onSucce
         )}
 
         {loading ? (
-          <div className="flex justify-center py-8"><Spinner /></div>
+          <SkeletonTable rows={3} columns={2} className="rounded-none border-0 shadow-none" />
         ) : available.length === 0 ? (
           <EmptyState message="Aucune autre plantation de cette brigade hors échantillon." />
         ) : (
@@ -177,7 +177,7 @@ function ReplacementModal({ open, onClose, binomeId, originalPlantation, onSucce
                   onClick={() => !saving && !locked && handleSelect(p)}>
                   <div className="min-w-0">
                     <p className={`text-sm ${locked ? "text-gray-500" : "font-medium text-gray-800"}`}>
-                      {p.pda_number || <span className="italic text-gray-400">Sans N°PDA</span>}
+                      {p.pda_number || <span className="italic text-gray-500">Sans N°PDA</span>}
                     </p>
                     <p className="text-xs text-gray-500">
                       {p.producer_name || "—"} · {[p.village, p.commune].filter(Boolean).join(", ") || "—"}
@@ -193,12 +193,12 @@ function ReplacementModal({ open, onClose, binomeId, originalPlantation, onSucce
                   {locked ? (
                     p.locked_by_me ? (
                       <button type="button" disabled={saving}
-                        className="btn-secondary text-xs px-2 py-1 shrink-0"
+                        className="btn-secondary shrink-0 px-3 text-xs"
                         onClick={(e) => { e.stopPropagation(); handleUnlock(p); }}>
                         Dégriser
                       </button>
                     ) : (
-                      <Lock size={14} className="text-gray-400 shrink-0" />
+                      <Lock size={14} className="text-gray-500 shrink-0" />
                     )
                   ) : (
                     <ArrowRight size={15} className="text-forest-600 shrink-0" />
@@ -477,15 +477,15 @@ export default function TerrainPage() {
                 </select>
               </label>
               <div className="relative w-full sm:w-72">
-                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
                 <input className="input py-2 pl-9" placeholder="Rechercher PDA, producteur, commune…" value={search} onChange={(e) => setSearch(e.target.value)} />
               </div>
-              <span className="text-xs text-gray-400 sm:ml-auto">{plantations.length} plantation(s)</span>
+              <span className="text-xs text-gray-500 sm:ml-auto">{plantations.length} plantation(s)</span>
             </div>
           )}
 
           {loading ? (
-            <div className="flex justify-center py-16"><Spinner size={32} /></div>
+            <SkeletonCards count={6} />
           ) : (
             <>
               {/* Plantations de l'échantillon */}

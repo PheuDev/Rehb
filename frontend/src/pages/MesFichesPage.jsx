@@ -10,7 +10,7 @@ import { useNavigate } from "react-router-dom";
 import { ExternalLink, RefreshCw, FileText } from "lucide-react";
 import AppHeader from "../components/AppHeader.jsx";
 import Sidebar from "../components/Sidebar.jsx";
-import { Spinner, EmptyState } from "../components/ui.jsx";
+import { SkeletonTable, EmptyState } from "../components/ui.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { listBinomeFiches } from "../api/terrain.js";
 
@@ -76,12 +76,56 @@ export default function MesFichesPage() {
           )}
 
           {loading ? (
-            <div className="flex justify-center py-16"><Spinner size={32} /></div>
+            <SkeletonTable rows={6} columns={5} />
           ) : fiches.length === 0 ? (
             <EmptyState message="Aucune fiche créée par votre binôme pour l'instant." />
           ) : (
-            <div className="overflow-x-auto rounded-xl border bg-white">
-              <table className="w-full text-sm">
+            <>
+              {/* ── Vue cartes (mobile) ── */}
+              <ul className="space-y-2 sm:hidden">
+                {fiches.map((f) => (
+                  <li key={f.id} className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-gray-900">
+                          {f.pda_number || <span className="italic text-gray-500">Sans N° PDA</span>}
+                        </p>
+                        <p className="mt-0.5 truncate text-xs text-gray-600">
+                          {f.producer_name || "Producteur non renseigné"}
+                        </p>
+                        <p className="mt-0.5 truncate text-xs text-gray-600">
+                          {[f.village, f.commune].filter(Boolean).join(", ") || "Localisation non renseignée"}
+                        </p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="text-sm font-semibold text-gray-800">
+                          {f.superficie_rehabilitee != null ? `${Number(f.superficie_rehabilitee).toFixed(2)} ha` : "—"}
+                        </p>
+                        <p className="text-xs text-gray-600">{f.annee_rehabilitation || "—"}</p>
+                      </div>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-2 border-t border-gray-100 pt-1">
+                      <div className="min-w-0 text-xs text-gray-600">
+                        <p className="truncate">{f.brigade_name || "Brigade non renseignée"}</p>
+                        <p>Créée le {formatDate(f.created_at)}</p>
+                      </div>
+                      <button
+                        type="button"
+                        className="touch rounded-lg text-gray-600 hover:bg-forest-50 hover:text-forest-600"
+                        aria-label={`Voir la fiche ${f.pda_number || f.id} dans la liste principale`}
+                        title="Voir dans la liste principale"
+                        onClick={() => navigate(`/?q=${f.pda_number || f.id}`)}
+                      >
+                        <ExternalLink size={17} />
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+
+              {/* ── Vue tableau (≥ sm) ── */}
+              <div className="hidden overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm sm:block">
+                <table className="w-full text-sm">
                 <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
                   <tr>
                     <th className="px-4 py-3 text-left">N°PDA</th>
@@ -101,7 +145,7 @@ export default function MesFichesPage() {
                         <div className="flex items-center gap-1.5">
                           <FileText size={13} className="text-forest-500 shrink-0" />
                           <span className="font-medium text-gray-800">
-                            {f.pda_number || <span className="italic text-gray-400">—</span>}
+                            {f.pda_number || <span className="italic text-gray-500">—</span>}
                           </span>
                         </div>
                       </td>
@@ -119,21 +163,24 @@ export default function MesFichesPage() {
                       <td className="px-4 py-3 text-gray-500">{formatDate(f.created_at)}</td>
                       <td className="px-4 py-3">
                         <button
-                          className="p-1 text-gray-400 hover:text-forest-600 hover:bg-forest-50 rounded"
+                          type="button"
+                          className="touch rounded-lg text-gray-600 hover:bg-forest-50 hover:text-forest-600"
+                          aria-label={`Voir la fiche ${f.pda_number || f.id} dans la liste principale`}
                           title="Voir dans la liste principale"
                           onClick={() => navigate(`/?q=${f.pda_number || f.id}`)}>
-                          <ExternalLink size={14} />
+                          <ExternalLink size={17} />
                         </button>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
+              </div>
+            </>
           )}
 
           {fiches.length > 0 && (
-            <p className="text-xs text-gray-400 text-right">{fiches.length} fiche(s)</p>
+            <p className="text-xs text-gray-500 text-right">{fiches.length} fiche(s)</p>
           )}
         </main>
       </div>

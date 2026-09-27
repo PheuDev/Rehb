@@ -7,7 +7,8 @@ import {
 
 import AppHeader from "../components/AppHeader.jsx";
 import Sidebar from "../components/Sidebar.jsx";
-import { Spinner, EmptyState } from "../components/ui.jsx";
+import { Spinner, EmptyState, Modal, SkeletonTable } from "../components/ui.jsx";
+import ConfirmDialog from "../components/ConfirmDialog.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import {
   deleteAuditSuggestion,
@@ -28,60 +29,61 @@ function DetailModal({ item, onClose }) {
   if (!item?.snapshot) return null;
   const snap = item.snapshot;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div
-        className="max-h-[85vh] w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-          <div>
-            <h3 className="font-semibold text-gray-900">{item.title}</h3>
-            <p className="text-xs text-gray-400 mt-0.5">{formatDateTime(item.created_at)}</p>
-          </div>
-          <button type="button" className="btn-secondary text-xs" onClick={onClose}>Fermer</button>
+    <Modal
+      open
+      onClose={onClose}
+      title={item.title}
+      size="lg"
+      footer={
+        <button type="button" className="btn-secondary" onClick={onClose}>
+          Fermer
+        </button>
+      }
+    >
+      <p className="text-xs text-gray-500">{formatDateTime(item.created_at)}</p>
+
+      <div className="mt-3 grid grid-cols-2 gap-3 border-b border-gray-100 pb-3 text-sm sm:grid-cols-4">
+        <div>
+          <p className="text-xs text-gray-500">Fiches échantillon</p>
+          <p className="font-semibold">{formatNumber(snap.fiches?.length ?? 0, 0)}</p>
         </div>
-        <div className="grid grid-cols-2 gap-3 border-b border-gray-100 px-5 py-3 sm:grid-cols-4 text-sm">
-          <div>
-            <p className="text-xs text-gray-400">Fiches échantillon</p>
-            <p className="font-semibold">{formatNumber(snap.fiches?.length ?? 0, 0)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-400">Superficie (ha)</p>
-            <p className="font-semibold">{formatNumber(snap.superficie_echantillon)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-400">Couverture</p>
-            <p className="font-semibold">{snap.pourcentage_couverture} %</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-400">Total système</p>
-            <p className="font-semibold">{formatNumber(snap.superficie_totale)} ha</p>
-          </div>
+        <div>
+          <p className="text-xs text-gray-500">Superficie (ha)</p>
+          <p className="font-semibold">{formatNumber(snap.superficie_echantillon)}</p>
         </div>
-        <div className="max-h-[50vh] overflow-auto">
-          <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-gray-50 border-b border-gray-100">
-              <tr>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-400">Brigade</th>
-                <th className="px-3 py-2 text-left text-xs font-medium text-gray-400">N° PDA</th>
-                <th className="px-3 py-2 text-right text-xs font-medium text-gray-400">Superficie</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {(snap.fiches || []).map((f) => (
-                <tr key={f.id} className="hover:bg-gray-50/60">
-                  <td className="px-4 py-2 text-gray-700">{f.brigade_name ?? "—"}</td>
-                  <td className="px-3 py-2 text-gray-600">{f.pda_number ?? "—"}</td>
-                  <td className="px-3 py-2 text-right text-gray-600">
-                    {f.superficie_rehabilitee != null ? `${formatNumber(f.superficie_rehabilitee)} ha` : "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div>
+          <p className="text-xs text-gray-500">Couverture</p>
+          <p className="font-semibold">{snap.pourcentage_couverture} %</p>
+        </div>
+        <div>
+          <p className="text-xs text-gray-500">Total système</p>
+          <p className="font-semibold">{formatNumber(snap.superficie_totale)} ha</p>
         </div>
       </div>
-    </div>
+
+      <div className="mt-3 max-h-[45dvh] overflow-auto rounded-lg border border-gray-100">
+        <table className="w-full text-sm">
+          <thead className="sticky top-0 border-b border-gray-100 bg-gray-50">
+            <tr>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Brigade</th>
+              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">N° PDA</th>
+              <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">Superficie</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {(snap.fiches || []).map((f) => (
+              <tr key={f.id} className="hover:bg-gray-50/60">
+                <td className="px-4 py-2 text-gray-700">{f.brigade_name ?? "—"}</td>
+                <td className="px-3 py-2 text-gray-600">{f.pda_number ?? "—"}</td>
+                <td className="px-3 py-2 text-right text-gray-600">
+                  {f.superficie_rehabilitee != null ? `${formatNumber(f.superficie_rehabilitee)} ha` : "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Modal>
   );
 }
 
@@ -96,6 +98,8 @@ export default function FichesAuditPage() {
   const [error, setError] = useState("");
   const [exportingId, setExportingId] = useState(null);
   const [detail, setDetail] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -131,15 +135,21 @@ export default function FichesAuditPage() {
     }
   }
 
-  async function handleDelete(id) {
-    if (!window.confirm(
-      "Supprimer cette suggestion ?\n\nLes fiches de cette suggestion distribuées aux équipes (Mes plantations) seront AUSSI supprimées et disparaîtront pour les binômes concernés."
-    )) return;
+  async function requestDelete(id) {
+    setDeleteTarget(id);
+  }
+
+  async function confirmDelete() {
+    if (deleteTarget == null) return;
+    setDeleting(true);
     try {
-      await deleteAuditSuggestion(id);
-      setItems((prev) => prev.filter((i) => i.id !== id));
+      await deleteAuditSuggestion(deleteTarget);
+      setItems((prev) => prev.filter((i) => i.id !== deleteTarget));
     } catch {
       setError("Suppression impossible.");
+    } finally {
+      setDeleting(false);
+      setDeleteTarget(null);
     }
   }
 
@@ -153,7 +163,7 @@ export default function FichesAuditPage() {
         <main className="min-w-0 flex-1 space-y-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <button type="button" onClick={() => navigate("/audit")} className="text-gray-400 hover:text-gray-700">
+              <button type="button" onClick={() => navigate("/audit")} aria-label="Retour à la superficie à auditer" className="touch -ml-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700">
                 <ArrowLeft size={18} />
               </button>
               <div>
@@ -181,22 +191,22 @@ export default function FichesAuditPage() {
           )}
 
           {loading ? (
-            <div className="flex justify-center py-24"><Spinner size={32} /></div>
+            <SkeletonTable rows={5} columns={6} />
           ) : items.length === 0 ? (
             <EmptyState message="Aucune suggestion enregistrée. Générez un échantillon puis cliquez sur « Sauvegarder la suggestion »." />
           ) : (
-            <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-100">
+            <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
+              <table className="w-full min-w-[52rem] text-sm">
+                <thead className="border-b border-gray-100 bg-gray-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Titre</th>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-400">Date</th>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-400">Auteur</th>
-                    <th className="px-3 py-3 text-center text-xs font-medium text-gray-400">Fiches</th>
-                    <th className="px-3 py-3 text-right text-xs font-medium text-gray-400">Superficie</th>
-                    <th className="px-3 py-3 text-center text-xs font-medium text-gray-400">Couverture</th>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-400">Filtre</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-400">Actions</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Titre</th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500">Date</th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500">Auteur</th>
+                    <th className="px-3 py-3 text-center text-xs font-medium text-gray-500">Fiches</th>
+                    <th className="px-3 py-3 text-right text-xs font-medium text-gray-500">Superficie</th>
+                    <th className="px-3 py-3 text-center text-xs font-medium text-gray-500">Couverture</th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500">Filtre</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -223,26 +233,28 @@ export default function FichesAuditPage() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex justify-end gap-1">
-                          <button type="button" className="btn-secondary text-xs px-2 py-1" onClick={() => handleView(row)} title="Voir">
-                            <Eye size={14} />
+                          <button type="button" className="btn-secondary h-10 w-10 p-0" onClick={() => handleView(row)} aria-label={`Voir la suggestion ${row.title}`} title="Voir">
+                            <Eye size={15} />
                           </button>
                           <button
                             type="button"
-                            className="btn-primary text-xs px-2 py-1"
+                            className="btn-primary h-10 w-10 p-0"
                             disabled={exportingId === row.id}
                             onClick={() => handleExport(row)}
+                            aria-label={`Télécharger la suggestion ${row.title} au format Excel`}
                             title="Télécharger Excel"
                           >
-                            {exportingId === row.id ? <Spinner size={13} /> : <Download size={14} />}
+                            {exportingId === row.id ? <Spinner size={13} /> : <Download size={15} />}
                           </button>
                           {isAdmin && (
                             <button
                               type="button"
-                              className="btn-secondary text-xs px-2 py-1 text-red-600 hover:bg-red-50"
-                              onClick={() => handleDelete(row.id)}
+                              className="btn-secondary h-10 w-10 p-0 text-red-600 hover:bg-red-50"
+                              onClick={() => requestDelete(row.id)}
+                              aria-label={`Supprimer la suggestion ${row.title}`}
                               title="Supprimer"
                             >
-                              <Trash2 size={14} />
+                              <Trash2 size={15} />
                             </button>
                           )}
                         </div>
@@ -257,6 +269,15 @@ export default function FichesAuditPage() {
       </div>
 
       {detail && <DetailModal item={detail} onClose={() => setDetail(null)} />}
+
+      <ConfirmDialog
+        open={deleteTarget != null}
+        title="Supprimer cette suggestion ?"
+        message="Les fiches de cette suggestion distribuées aux équipes (« Mes plantations ») seront AUSSI supprimées et disparaîtront pour les binômes concernés."
+        loading={deleting}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }

@@ -17,7 +17,7 @@ import {
 
 import AppHeader from "../components/AppHeader.jsx";
 import Sidebar from "../components/Sidebar.jsx";
-import { Spinner, EmptyState } from "../components/ui.jsx";
+import { SkeletonTable, EmptyState } from "../components/ui.jsx";
 import { getProducers, exportProducteursExcel } from "../api/rehabilitations.js";
 import { formatNumber } from "../utils/format.js";
 import { useDebounce } from "../hooks/useDebounce.js";
@@ -51,7 +51,7 @@ function Th({ label, field, sortKey, sortDir, onSort, className = "" }) {
     >
       <span className="inline-flex items-center gap-1">
         {label}
-        <Icon size={13} className={active ? "text-forest-600" : "text-gray-400"} />
+        <Icon size={13} className={active ? "text-forest-600" : "text-gray-500"} />
       </span>
     </th>
   );
@@ -60,7 +60,7 @@ function Th({ label, field, sortKey, sortDir, onSort, className = "" }) {
 // ─── Badge liste ─────────────────────────────────────────────────────────────
 function BadgeList({ items, max = 2, accent = "bg-forest-100 text-forest-700" }) {
   if (!items || items.length === 0)
-    return <span className="text-xs text-gray-400">—</span>;
+    return <span className="text-xs text-gray-500">—</span>;
   const shown = items.slice(0, max);
   const rest = items.length - max;
   return (
@@ -222,7 +222,7 @@ export default function ProducersPage() {
           <div className="flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
             <div className="relative flex-1 min-w-48">
               <Search
-                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"
                 size={15}
               />
               <input
@@ -250,9 +250,7 @@ export default function ProducersPage() {
           {/* Tableau */}
           <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
             {loading ? (
-              <div className="flex items-center justify-center py-20">
-                <Spinner size={32} />
-              </div>
+              <SkeletonTable rows={6} columns={6} className="rounded-none border-0 shadow-none" />
             ) : sorted.length === 0 ? (
               <EmptyState message="Aucun producteur trouvé." />
             ) : (
@@ -293,11 +291,11 @@ export default function ProducersPage() {
                           <td className="px-4 py-3 text-gray-600">
                             {p.producer_phone ? (
                               <span className="inline-flex items-center gap-1">
-                                <Phone size={13} className="text-gray-400" />
+                                <Phone size={13} className="text-gray-500" />
                                 {p.producer_phone}
                               </span>
                             ) : (
-                              <span className="text-gray-400">—</span>
+                              <span className="text-gray-500">—</span>
                             )}
                           </td>
 

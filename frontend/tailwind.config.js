@@ -3,6 +3,21 @@ export default {
   content: ["./index.html", "./src/**/*.{js,jsx}"],
   theme: {
     extend: {
+      // Pile système : identique à celle déclarée dans Chart.js (aucune
+      // requête externe, pas de FOUT) — évite de déclarer une police « Inter »
+      // qui n'est jamais chargée.
+      fontFamily: {
+        sans: [
+          "ui-sans-serif",
+          "system-ui",
+          "-apple-system",
+          "Segoe UI",
+          "Roboto",
+          "Helvetica Neue",
+          "Arial",
+          "sans-serif",
+        ],
+      },
       colors: {
         forest: {
           50: "#f0f7f2",

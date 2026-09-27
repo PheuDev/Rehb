@@ -17,7 +17,7 @@ import { BarChart3, FileText, MapPin, TreeDeciduous, Users } from "lucide-react"
 
 import AppHeader from "../components/AppHeader.jsx";
 import Sidebar from "../components/Sidebar.jsx";
-import { Spinner } from "../components/ui.jsx";
+import { Spinner, Skeleton } from "../components/ui.jsx";
 import { getStats } from "../api/rehabilitations.js";
 import { formatNumber } from "../utils/format.js";
 
@@ -47,7 +47,8 @@ const SKY       = "#0284c7";
 const SUP_CLASS_COLORS = [FOREST_600, FOREST_400, EMERALD, AMBER];
 
 const CHART_FONT = {
-  family: "Inter, ui-sans-serif, system-ui, sans-serif",
+  // Aligné sur la pile `font-sans` de Tailwind (aucune police externe chargée).
+  family: "ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
   size: 12,
 };
 
@@ -101,6 +102,29 @@ function ChartCard({ title, children, className = "" }) {
   );
 }
 
+// ─── Squelette du dashboard (évite le grand vide pendant le chargement) ──────
+function DashboardSkeleton() {
+  return (
+    <div role="status" aria-live="polite" className="space-y-6">
+      <span className="sr-only">Chargement des statistiques…</span>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <Skeleton className="h-[5.5rem] rounded-xl xl:col-span-2" />
+        <Skeleton className="h-[5.5rem] rounded-xl xl:col-span-2" />
+        <Skeleton className="h-[5.5rem] rounded-xl" />
+        <Skeleton className="h-[5.5rem] rounded-xl" />
+      </div>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <Skeleton className="h-80 rounded-xl lg:col-span-2" />
+        <Skeleton className="h-80 rounded-xl" />
+      </div>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <Skeleton className="h-80 rounded-xl lg:col-span-2" />
+        <Skeleton className="h-96 rounded-xl" />
+      </div>
+    </div>
+  );
+}
+
 // ─── Bar chart — par département ─────────────────────────────────────────────
 function BarDepartement({ data }) {
   const labels = data.map((d) => d.departement ?? "—");
@@ -145,7 +169,7 @@ function BarDepartement({ data }) {
   });
 
   return (
-    <div style={{ height: "288px" }}>
+    <div className="h-64 sm:h-72">
       <Bar data={chartData} options={options} />
     </div>
   );
@@ -206,7 +230,7 @@ function LineAnnee({ data }) {
   });
 
   return (
-    <div style={{ height: "288px" }}>
+    <div className="h-64 sm:h-72">
       <Line data={chartData} options={options} />
     </div>
   );
@@ -261,7 +285,7 @@ function DoughnutSupClass({ data }) {
   };
 
   return (
-    <div style={{ height: "256px" }}>
+    <div className="h-64 sm:h-72">
       <Doughnut data={chartData} options={options} />
     </div>
   );
@@ -322,7 +346,7 @@ function BarBrigades({ data }) {
   };
 
   return (
-    <div style={{ height: "320px" }}>
+    <div className="h-72 sm:h-80">
       <Bar data={chartData} options={options} />
     </div>
   );
@@ -372,11 +396,9 @@ export default function DashboardPage() {
           </div>
 
           {loading ? (
-            <div className="flex items-center justify-center py-32">
-              <Spinner size={36} />
-            </div>
+            <DashboardSkeleton />
           ) : !stats ? (
-            <div className="rounded-xl border border-gray-200 bg-white p-12 text-center text-sm text-gray-400 shadow-sm">
+            <div className="rounded-xl border border-gray-200 bg-white p-12 text-center text-sm text-gray-500 shadow-sm">
               Impossible de charger les statistiques.
             </div>
           ) : (
@@ -424,7 +446,7 @@ export default function DashboardPage() {
                   className="lg:col-span-2"
                 >
                   {stats.parDepartement.length === 0 ? (
-                    <p className="py-16 text-center text-sm text-gray-400">Aucune donnée</p>
+                    <p className="py-16 text-center text-sm text-gray-500">Aucune donnée</p>
                   ) : (
                     <BarDepartement data={stats.parDepartement} />
                   )}
@@ -432,7 +454,7 @@ export default function DashboardPage() {
 
                 <ChartCard title="Répartition par classe de superficie">
                   {stats.parSupClass.length === 0 ? (
-                    <p className="py-16 text-center text-sm text-gray-400">Aucune donnée</p>
+                    <p className="py-16 text-center text-sm text-gray-500">Aucune donnée</p>
                   ) : (
                     <DoughnutSupClass data={stats.parSupClass} />
                   )}
@@ -446,7 +468,7 @@ export default function DashboardPage() {
                   className="lg:col-span-2"
                 >
                   {stats.parAnnee.filter((d) => d.annee != null).length === 0 ? (
-                    <p className="py-16 text-center text-sm text-gray-400">Aucune donnée</p>
+                    <p className="py-16 text-center text-sm text-gray-500">Aucune donnée</p>
                   ) : (
                     <LineAnnee data={stats.parAnnee} />
                   )}
@@ -454,7 +476,7 @@ export default function DashboardPage() {
 
                 <ChartCard title="Top brigades (par nombre de fiches)">
                   {stats.parBrigade.length === 0 ? (
-                    <p className="py-16 text-center text-sm text-gray-400">Aucune brigade enregistrée</p>
+                    <p className="py-16 text-center text-sm text-gray-500">Aucune brigade enregistrée</p>
                   ) : (
                     <BarBrigades data={stats.parBrigade} />
                   )}
@@ -462,7 +484,7 @@ export default function DashboardPage() {
               </div>
 
               {/* Récap textuel discret */}
-              <p className="text-xs text-gray-400 text-right">
+              <p className="text-right text-xs text-gray-500">
                 {stats.totalCommunes} commune{stats.totalCommunes !== 1 ? "s" : ""} ·{" "}
                 {stats.totalVillages} village{stats.totalVillages !== 1 ? "s" : ""} ·{" "}
                 {stats.totalBrigades} brigade{stats.totalBrigades !== 1 ? "s" : ""}

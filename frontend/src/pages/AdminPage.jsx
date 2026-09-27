@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import AppHeader from "../components/AppHeader.jsx";
 import Sidebar from "../components/Sidebar.jsx";
-import { Modal, Spinner, EmptyState } from "../components/ui.jsx";
+import { Modal, SkeletonTable, EmptyState } from "../components/ui.jsx";
 import {
   listTeams, createTeam, updateTeam, deleteTeam,
   listBinomes, createBinome, deleteBinome,
@@ -111,7 +111,7 @@ function TeamsSection() {
     setBinomesMap(p => ({ ...p, [teamId]: refreshed }));
   }
 
-  if (loading) return <div className="flex justify-center py-12"><Spinner /></div>;
+  if (loading) return <SkeletonTable rows={4} columns={3} />;
 
   return (
     <div className="space-y-4">
@@ -148,12 +148,16 @@ function TeamsSection() {
               )}
             </div>
             <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
-              <span className="text-xs text-gray-400 mr-2">{team.nb_binomes} binôme(s)</span>
-              <button className="p-1 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded"
+              <span className="text-xs text-gray-500 mr-2">{team.nb_binomes} binôme(s)</span>
+              <button type="button" className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-amber-50 hover:text-amber-600"
+                aria-label={`Renommer l'équipe ${team.name}`}
+                title="Renommer l'équipe"
                 onClick={() => setEditTeam({ id: team.id, name: team.name })}>
                 <Pencil size={14} />
               </button>
-              <button className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+              <button type="button" className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-600"
+                aria-label={`Supprimer l'équipe ${team.name}`}
+                title="Supprimer l'équipe"
                 onClick={() => handleDeleteTeam(team.id)}>
                 <Trash2 size={14} />
               </button>
@@ -165,9 +169,11 @@ function TeamsSection() {
               {(binomesMap[team.id] || []).map(b => (
                 <div key={b.id} className="flex items-center justify-between py-1.5 border-b border-gray-50">
                   <span className="text-sm text-gray-700">{b.name}
-                    <span className="ml-2 text-xs text-gray-400">{b.nb_members} membre(s)</span>
+                    <span className="ml-2 text-xs text-gray-500">{b.nb_members} membre(s)</span>
                   </span>
-                  <button className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                  <button type="button" className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-600"
+                    aria-label={`Supprimer le binôme ${b.name}`}
+                    title="Supprimer le binôme"
                     onClick={() => handleDeleteBinome(team.id, b.id)}>
                     <Trash2 size={13} />
                   </button>
@@ -272,7 +278,7 @@ function AssignmentsSection() {
 
           {/* Liste des brigades affectées à cette équipe */}
           {loadingA ? (
-            <div className="flex justify-center py-8"><Spinner /></div>
+            <SkeletonTable rows={3} columns={3} className="rounded-none border-0 shadow-none" />
           ) : assignments.length === 0 ? (
             <EmptyState message="Aucune brigade affectée à cette équipe." />
           ) : (
@@ -289,7 +295,9 @@ function AssignmentsSection() {
                     <tr key={a.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 font-medium text-gray-800">{a.brigade_name}</td>
                       <td className="px-4 py-3 flex justify-end">
-                        <button className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                        <button type="button" className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-red-50 hover:text-red-600"
+                          aria-label={`Retirer l'affectation de la brigade ${a.brigade_name}`}
+                          title="Retirer l'affectation"
                           onClick={() => handleRemove(a.brigade_id, a.id)}>
                           <Trash2 size={14} />
                         </button>
@@ -364,7 +372,7 @@ function UsersSection() {
     finally { setSaving(false); }
   }
 
-  if (loading) return <div className="flex justify-center py-12"><Spinner /></div>;
+  if (loading) return <SkeletonTable rows={4} columns={3} />;
 
   return (
     <div className="space-y-4">
@@ -402,12 +410,12 @@ function UsersSection() {
                   <span className={`inline-block h-2 w-2 rounded-full ${u.is_active ? "bg-green-500" : "bg-red-400"}`} />
                 </td>
                 <td className="px-4 py-3 flex justify-end gap-1">
-                  <button className="p-1 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded"
-                    title="Modifier" onClick={() => openEdit(u)}>
+                  <button type="button" className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-amber-50 hover:text-amber-600"
+                    title="Modifier" aria-label={`Modifier l'utilisateur ${u.username}`} onClick={() => openEdit(u)}>
                     <Pencil size={14} />
                   </button>
-                  <button className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded"
-                    title="Réinitialiser le mot de passe" onClick={() => { setResetTarget(u); setNewPassword(""); }}>
+                  <button type="button" className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-blue-50 hover:text-blue-600"
+                    title="Réinitialiser le mot de passe" aria-label={`Réinitialiser le mot de passe de ${u.username}`} onClick={() => { setResetTarget(u); setNewPassword(""); }}>
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
                       stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/>

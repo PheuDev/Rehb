@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import AppHeader from "../components/AppHeader.jsx";
 import Sidebar from "../components/Sidebar.jsx";
-import { EmptyState, Modal, Spinner } from "../components/ui.jsx";
+import { EmptyState, Modal, Spinner, SkeletonTable } from "../components/ui.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import {
   createStockReplacement,
@@ -187,7 +187,7 @@ export default function PlantationsHorsEchantillonPage() {
               </select>
             </label>
             <div className="relative w-full sm:w-64">
-              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
               <input
                 className="input pl-9 py-2"
                 placeholder="Rechercher…"
@@ -196,7 +196,7 @@ export default function PlantationsHorsEchantillonPage() {
               />
             </div>
             {plantations.length > 0 && (
-              <span className="text-xs text-gray-400 sm:ml-auto">{plantations.length} plantation(s)</span>
+              <span className="text-xs text-gray-500 sm:ml-auto">{plantations.length} plantation(s)</span>
             )}
           </div>
 
@@ -205,7 +205,7 @@ export default function PlantationsHorsEchantillonPage() {
           )}
 
           {loading ? (
-            <div className="flex justify-center py-16"><Spinner size={32} /></div>
+            <SkeletonTable rows={6} columns={5} />
           ) : listError ? null : plantations.length === 0 ? (
             <EmptyState message="Aucune plantation hors-échantillon pour cette brigade." />
           ) : (
@@ -294,7 +294,7 @@ export default function PlantationsHorsEchantillonPage() {
                               p.locked_by_me && (
                                 <button
                                   type="button"
-                                  className="btn-secondary text-xs px-2 py-1"
+                                  className="btn-secondary px-3 text-xs"
                                   disabled={saving}
                                   onClick={() => handleUnlock(p)}
                                 >
@@ -304,7 +304,7 @@ export default function PlantationsHorsEchantillonPage() {
                             ) : (
                               <button
                                 type="button"
-                                className="btn-primary text-xs px-2 py-1"
+                                className="btn-primary px-3 text-xs"
                                 disabled={saving}
                                 onClick={() => openUseModal(p)}
                               >
@@ -322,7 +322,7 @@ export default function PlantationsHorsEchantillonPage() {
             </>
           )}
 
-          <p className="hidden text-xs text-gray-400 sm:block">
+          <p className="hidden text-xs text-gray-500 sm:block">
             Une plantation hors-échantillon utilisée est grisée : elle ne peut pas être choisie
             deux fois. La plantation échantillonnée remplacée passe au statut « remplacée » dans
             Mes plantations.

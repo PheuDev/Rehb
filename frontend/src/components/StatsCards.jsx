@@ -1,17 +1,21 @@
 import { FileText, TreeDeciduous, MapPin, Users } from "lucide-react";
 import { formatNumber } from "../utils/format.js";
-import { Spinner } from "./ui.jsx";
+import { Skeleton } from "./ui.jsx";
 
 function Card({ icon: Icon, label, value, loading, accent }) {
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
       <div className="flex items-center gap-3">
-        <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${accent}`}>
+        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${accent}`}>
           <Icon size={20} />
         </div>
-        <div>
-          <p className="text-xs font-medium text-gray-500">{label}</p>
-          {loading ? <Spinner size={18} /> : <p className="text-xl font-semibold text-gray-900">{value}</p>}
+        <div className="min-w-0">
+          <p className="text-xs font-medium text-gray-600">{label}</p>
+          {loading ? (
+            <Skeleton className="mt-1 h-6 w-20" />
+          ) : (
+            <p className="text-xl font-semibold text-gray-900">{value}</p>
+          )}
         </div>
       </div>
     </div>

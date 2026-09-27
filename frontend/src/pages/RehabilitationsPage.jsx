@@ -426,7 +426,6 @@ export default function RehabilitationsPage() {
             onToggleSelect={toggleSelectItem}
             onToggleSelectAll={toggleSelectAll}
             allSelected={allCurrentPageSelected}
-            showMissingFields={activeView === "incomplete"}
           />
 
           <div className="rounded-xl border border-gray-200 bg-white shadow-sm">

@@ -87,8 +87,9 @@ export default function ChangePasswordModal({ open, onClose }) {
                 onChange={e => setCurrent(e.target.value)}
                 autoComplete="current-password"
               />
-              <button type="button" tabIndex={-1}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              <button type="button"
+                aria-label={showCurrent ? "Masquer le mot de passe actuel" : "Afficher le mot de passe actuel"}
+                className="absolute right-1 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700"
                 onClick={() => setShowCurrent(v => !v)}>
                 {showCurrent ? <EyeOff size={15} /> : <Eye size={15} />}
               </button>
@@ -108,8 +109,9 @@ export default function ChangePasswordModal({ open, onClose }) {
                 onChange={e => setNext(e.target.value)}
                 autoComplete="new-password"
               />
-              <button type="button" tabIndex={-1}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              <button type="button"
+                aria-label={showNext ? "Masquer le nouveau mot de passe" : "Afficher le nouveau mot de passe"}
+                className="absolute right-1 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700"
                 onClick={() => setShowNext(v => !v)}>
                 {showNext ? <EyeOff size={15} /> : <Eye size={15} />}
               </button>
