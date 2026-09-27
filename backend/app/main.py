@@ -864,7 +864,11 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.CORS_ORIGIN],
+    allow_origins=list(dict.fromkeys([
+        settings.CORS_ORIGIN,
+        "https://rehabpacofide.com",
+        "https://www.rehabpacofide.com",
+    ])),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
