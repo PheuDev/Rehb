@@ -1014,7 +1014,7 @@ def sync_saved_sample_plantations() -> int:
             for suggestion in suggestions
             for fiche in ((suggestion.snapshot or {}).get("fiches") or [])
         ]
-        _ensure_brigade_entities_from_names([
+        _ensure_brigade_entities_from_names(db, [
             (fiche.get("brigade_name") or "").strip()
             for fiche in fiches
             if (fiche.get("brigade_name") or "").strip()
