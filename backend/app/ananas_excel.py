@@ -95,6 +95,13 @@ def _validate_headers(ws) -> None:
         raise ValueError("Le classeur contient des colonnes supplémentaires après « Sup attribuée / confirmée (ha) ».")
     if "G1:H1" not in {str(rng) for rng in ws.merged_cells.ranges}:
         raise ValueError("L'en-tête « Coordonnées Géographiques » doit couvrir les colonnes X et Y (G1:H1).")
+    subheaders = (ws.cell(2, 7).value, ws.cell(2, 8).value)
+    if subheaders != ("X", "Y"):
+        raise ValueError("La deuxième ligne doit contenir « X » en G et « Y » en H sous l'en-tête fusionné.")
+    if any(ws.cell(2, column).value not in (None, "") for column in (*range(1, 7), *range(9, len(HEADERS) + 1))):
+        raise ValueError("La deuxième ligne du modèle doit contenir uniquement les coordonnées X et Y.")
+    if any(ws.cell(2, column).value not in (None, "") for column in range(len(HEADERS) + 1, ws.max_column + 1)):
+        raise ValueError("Le classeur contient des en-têtes supplémentaires sur la deuxième ligne.")
 
 
 def parse_import_workbook(content: bytes) -> tuple[list[dict], list[dict]]:
@@ -110,7 +117,7 @@ def parse_import_workbook(content: bytes) -> tuple[list[dict], list[dict]]:
 
     valid_rows: list[dict] = []
     row_errors: list[dict] = []
-    for row_number in range(2, ws.max_row + 1):
+    for row_number in range(3, ws.max_row + 1):
         values = [ws.cell(row_number, column).value for column in range(1, len(HEADERS) + 1)]
         if all(value is None or (isinstance(value, str) and not value.strip()) for value in values):
             continue
@@ -160,16 +167,22 @@ def build_template_workbook() -> Workbook:
         if value is not None:
             ws.cell(1, index, value)
     ws.merge_cells("G1:H1")
+    for index in (*range(1, 7), *range(9, len(HEADERS) + 1)):
+        letter = get_column_letter(index)
+        ws.merge_cells(f"{letter}1:{letter}2")
+    ws.cell(2, 7, "X")
+    ws.cell(2, 8, "Y")
     header_fill = PatternFill(start_color="C6E0B4", end_color="C6E0B4", fill_type="solid")
     for index, width in enumerate(WIDTHS, start=1):
-        cell = ws.cell(1, index)
-        cell.fill = header_fill
-        cell.font = Font(bold=True, color="000000")
-        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        for row in (1, 2):
+            cell = ws.cell(row, index)
+            cell.fill = header_fill
+            cell.font = Font(bold=True, color="000000")
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
         ws.column_dimensions[get_column_letter(index)].width = width
-    ws.row_dimensions[1].height = 58
-    ws.freeze_panes = "A2"
-    ws.auto_filter.ref = f"A1:Q1"
+    ws.row_dimensions[1].height = 44
+    ws.row_dimensions[2].height = 18
+    ws.freeze_panes = "A3"
     return workbook
 
 
@@ -196,16 +209,22 @@ def build_data_workbook(sheets: list[tuple[str, list[dict]]]) -> Workbook:
             if value is not None:
                 ws.cell(1, index, value)
         ws.merge_cells("G1:H1")
-        for item in rows:
-            ws.append(_row_from_item(item))
+        for index in (*range(1, 7), *range(9, len(HEADERS) + 1)):
+            letter = get_column_letter(index)
+            ws.merge_cells(f"{letter}1:{letter}2")
+        ws.cell(2, 7, "X")
+        ws.cell(2, 8, "Y")
         header_fill = PatternFill(start_color="C6E0B4", end_color="C6E0B4", fill_type="solid")
         for index, width in enumerate(WIDTHS, start=1):
-            cell = ws.cell(1, index)
-            cell.fill = header_fill
-            cell.font = Font(bold=True)
-            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            for row in (1, 2):
+                cell = ws.cell(row, index)
+                cell.fill = header_fill
+                cell.font = Font(bold=True)
+                cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
             ws.column_dimensions[get_column_letter(index)].width = width
-        ws.row_dimensions[1].height = 58
-        ws.freeze_panes = "A2"
-        ws.auto_filter.ref = f"A1:Q{max(ws.max_row, 1)}"
+        ws.row_dimensions[1].height = 44
+        ws.row_dimensions[2].height = 18
+        for item in rows:
+            ws.append(_row_from_item(item))
+        ws.freeze_panes = "A3"
     return workbook
