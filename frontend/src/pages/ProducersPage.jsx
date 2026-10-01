@@ -130,9 +130,9 @@ export default function ProducersPage() {
   const paginated = sorted.slice((page - 1) * limit, page * limit);
 
   function handleSelectProducer(name) {
-    navigate(`/?brigade=`); // retour accueil sans filtre spécifique
+    navigate(`/anacardier?brigade=`); // retour aux plantations sans filtre spécifique
     // Pour filtrer par producteur, on navigue vers / avec le nom en recherche
-    navigate(`/?q=${encodeURIComponent(name)}`);
+    navigate(`/anacardier?q=${encodeURIComponent(name)}`);
   }
 
   return (
@@ -148,7 +148,7 @@ export default function ProducersPage() {
         <main className="min-w-0 flex-1 space-y-6">
           {/* Breadcrumb */}
           {/* Breadcrumb */}
-          <button onClick={() => navigate("/")} className="btn-secondary">
+          <button onClick={() => navigate("/anacardier")} className="btn-secondary">
             <ArrowLeft size={16} /> Retour aux fiches
           </button>
 

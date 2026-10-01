@@ -114,7 +114,7 @@ export default function MesFichesPage() {
                         className="touch rounded-lg text-gray-600 hover:bg-forest-50 hover:text-forest-600"
                         aria-label={`Voir la fiche ${f.pda_number || f.id} dans la liste principale`}
                         title="Voir dans la liste principale"
-                        onClick={() => navigate(`/?q=${f.pda_number || f.id}`)}
+                        onClick={() => navigate(`/anacardier?q=${f.pda_number || f.id}`)}
                       >
                         <ExternalLink size={17} />
                       </button>
@@ -167,7 +167,7 @@ export default function MesFichesPage() {
                           className="touch rounded-lg text-gray-600 hover:bg-forest-50 hover:text-forest-600"
                           aria-label={`Voir la fiche ${f.pda_number || f.id} dans la liste principale`}
                           title="Voir dans la liste principale"
-                          onClick={() => navigate(`/?q=${f.pda_number || f.id}`)}>
+                          onClick={() => navigate(`/anacardier?q=${f.pda_number || f.id}`)}>
                           <ExternalLink size={17} />
                         </button>
                       </td>

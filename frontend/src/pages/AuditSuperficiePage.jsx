@@ -202,7 +202,7 @@ export default function AuditSuperficiePage() {
           {/* Breadcrumb + titre + actions — tout sur une ligne */}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <button onClick={() => navigate("/")} className="text-gray-500 hover:text-gray-700 transition-colors" title="Retour">
+              <button onClick={() => navigate("/anacardier")} className="text-gray-500 hover:text-gray-700 transition-colors" title="Retour">
                 <ArrowLeft size={18} />
               </button>
               <div className="flex items-center gap-2">

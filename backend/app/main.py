@@ -17,6 +17,7 @@ from app.routers import rehabilitations
 from app.routers import auth as auth_router
 from app.routers import users as users_router
 from app.routers import terrain as terrain_router
+from app.routers import ananas as ananas_router
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -304,6 +305,45 @@ BASE_DDL = [
     )""",
     "CREATE INDEX IF NOT EXISTS ix_team_audit_team ON team_audit_assignments (team_id)",
     "CREATE INDEX IF NOT EXISTS ix_team_audit_suggestion ON team_audit_assignments (audit_suggestion_id)",
+
+    # Données et suggestions Ananas, isolées d'Anacardier.
+    """CREATE TABLE IF NOT EXISTS ananas_plantations (
+        id                          SERIAL PRIMARY KEY,
+        numero                      INTEGER NOT NULL CHECK (numero >= 0),
+        nom_prenoms                 VARCHAR(255),
+        sexe                        VARCHAR(30),
+        commune                     VARCHAR(180),
+        arrondissement              VARCHAR(180),
+        village_hameau               VARCHAR(180),
+        coord_x                     NUMERIC(14,3) CHECK (coord_x IS NULL OR coord_x >= 0),
+        coord_y                     NUMERIC(14,3) CHECK (coord_y IS NULL OR coord_y >= 0),
+        superficie_declaree         NUMERIC(12,3) CHECK (superficie_declaree IS NULL OR superficie_declaree >= 0),
+        superficie_trackee          NUMERIC(12,3) CHECK (superficie_trackee IS NULL OR superficie_trackee >= 0),
+        type_friche                 VARCHAR(180),
+        type_espece_vegetale        VARCHAR(180),
+        type_sol                    VARCHAR(180),
+        precedents_culturaux        TEXT,
+        decision_equipe_validation  VARCHAR(180),
+        decision_atda7              VARCHAR(180),
+        superficie_confirmee        NUMERIC(12,3) CHECK (superficie_confirmee IS NULL OR superficie_confirmee >= 0),
+        created_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )""",
+    "CREATE INDEX IF NOT EXISTS ix_ananas_numero ON ananas_plantations (numero)",
+    "CREATE INDEX IF NOT EXISTS ix_ananas_commune ON ananas_plantations (commune)",
+    "CREATE INDEX IF NOT EXISTS ix_ananas_arrondissement ON ananas_plantations (arrondissement)",
+    "CREATE INDEX IF NOT EXISTS ix_ananas_area_confirmed ON ananas_plantations (superficie_confirmee)",
+    """CREATE TABLE IF NOT EXISTS saved_ananas_audit_suggestions (
+        id                      SERIAL PRIMARY KEY,
+        title                   VARCHAR(200) NOT NULL,
+        created_by_id           INTEGER REFERENCES users (id) ON DELETE SET NULL,
+        snapshot                JSONB NOT NULL,
+        nb_fiches_echantillon   INTEGER NOT NULL DEFAULT 0,
+        superficie_echantillon  NUMERIC(12,3),
+        pourcentage_couverture  NUMERIC(6,2),
+        created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )""",
+    "CREATE INDEX IF NOT EXISTS ix_saved_ananas_audit_created_at ON saved_ananas_audit_suggestions (created_at)",
 ]
 
 
@@ -338,6 +378,8 @@ REQUIRED_TABLES = (
     "sample_assignments",
     "replacement_selections",
     "rehabilitations",
+    "ananas_plantations",
+    "saved_ananas_audit_suggestions",
 )
 
 
@@ -893,3 +935,4 @@ app.include_router(rehabilitations.router)
 app.include_router(auth_router.router)
 app.include_router(users_router.router)
 app.include_router(terrain_router.router)
+app.include_router(ananas_router.router)

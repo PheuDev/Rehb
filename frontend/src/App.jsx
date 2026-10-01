@@ -21,7 +21,9 @@ const PlantationsHorsEchantillonPage = lazy(() => import("./pages/PlantationsHor
 const MesBrigadesPage = lazy(() => import("./pages/MesBrigadesPage.jsx"));
 const MonEquipePage = lazy(() => import("./pages/MonEquipePage.jsx"));
 const SystemSelectorPage = lazy(() => import("./pages/SystemSelectorPage.jsx"));
-const AnanasDevelopmentPage = lazy(() => import("./pages/AnanasDevelopmentPage.jsx"));
+const AnanasPlantationsPage = lazy(() => import("./pages/AnanasPlantationsPage.jsx"));
+const AnanasAuditPage = lazy(() => import("./pages/AnanasAuditPage.jsx"));
+const AnanasSuggestionsPage = lazy(() => import("./pages/AnanasSuggestionsPage.jsx"));
 
 /** Écran d'attente pendant le téléchargement d'un chunk de page. */
 function PageFallback() {
@@ -49,7 +51,9 @@ export default function App() {
           {/* ── Routes protégées (tout utilisateur authentifié actif) ── */}
           <Route path="/" element={<PrivateRoute><SystemSelectorPage /></PrivateRoute>} />
           <Route path="/anacardier" element={<PrivateRoute><RehabilitationsPage /></PrivateRoute>} />
-          <Route path="/ananas" element={<PrivateRoute><AnanasDevelopmentPage /></PrivateRoute>} />
+          <Route path="/ananas" element={<PrivateRoute><AnanasPlantationsPage /></PrivateRoute>} />
+          <Route path="/ananas/echantillonnage" element={<PrivateRoute><AnanasAuditPage /></PrivateRoute>} />
+          <Route path="/ananas/suggestions" element={<PrivateRoute><AnanasSuggestionsPage /></PrivateRoute>} />
           <Route path="/brigades" element={<PrivateRoute><BrigadesPage /></PrivateRoute>} />
           <Route path="/dashboard" element={<PrivateRoute><DashboardPage /></PrivateRoute>} />
           <Route path="/producteurs" element={<PrivateRoute><ProducersPage /></PrivateRoute>} />

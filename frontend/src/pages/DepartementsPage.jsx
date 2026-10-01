@@ -127,7 +127,7 @@ export default function DepartementsPage() {
   const paginated = sorted.slice((page - 1) * limit, page * limit);
 
   function handleSelectDepartement(name) {
-    navigate(`/?departement=${encodeURIComponent(name)}`);
+    navigate(`/anacardier?departement=${encodeURIComponent(name)}`);
   }
 
   // Totaux globaux
@@ -147,7 +147,7 @@ export default function DepartementsPage() {
 
         <main className="min-w-0 flex-1 space-y-6">
           {/* Breadcrumb */}
-          <button onClick={() => navigate("/")} className="btn-secondary">
+          <button onClick={() => navigate("/anacardier")} className="btn-secondary">
             <ArrowLeft size={16} /> Retour aux fiches
           </button>
 

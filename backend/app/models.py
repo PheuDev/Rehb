@@ -509,3 +509,58 @@ class TeamAuditAssignment(Base):
         Index("ix_team_audit_team", "team_id"),
         Index("ix_team_audit_suggestion", "audit_suggestion_id"),
     )
+
+
+class AnanasPlantation(Base):
+    """Fiche du système Ananas, isolée des données Anacardier."""
+
+    __tablename__ = "ananas_plantations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    numero = Column(Integer, nullable=False)
+    nom_prenoms = Column(String(255), nullable=True)
+    sexe = Column(String(30), nullable=True)
+    commune = Column(String(180), nullable=True, index=True)
+    arrondissement = Column(String(180), nullable=True, index=True)
+    village_hameau = Column(String(180), nullable=True)
+    coord_x = Column(Numeric(14, 3), nullable=True)
+    coord_y = Column(Numeric(14, 3), nullable=True)
+    superficie_declaree = Column(Numeric(12, 3), nullable=True)
+    superficie_trackee = Column(Numeric(12, 3), nullable=True)
+    type_friche = Column(String(180), nullable=True)
+    type_espece_vegetale = Column(String(180), nullable=True)
+    type_sol = Column(String(180), nullable=True)
+    precedents_culturaux = Column(Text, nullable=True)
+    decision_equipe_validation = Column(String(180), nullable=True)
+    decision_atda7 = Column(String(180), nullable=True)
+    superficie_confirmee = Column(Numeric(12, 3), nullable=True)
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
+
+    __table_args__ = (
+        CheckConstraint("numero >= 0", name="ck_ananas_numero_positive"),
+        CheckConstraint("coord_x IS NULL OR coord_x >= 0", name="ck_ananas_coord_x_positive"),
+        CheckConstraint("coord_y IS NULL OR coord_y >= 0", name="ck_ananas_coord_y_positive"),
+        CheckConstraint("superficie_declaree IS NULL OR superficie_declaree >= 0", name="ck_ananas_sup_decl_positive"),
+        CheckConstraint("superficie_trackee IS NULL OR superficie_trackee >= 0", name="ck_ananas_sup_track_positive"),
+        CheckConstraint("superficie_confirmee IS NULL OR superficie_confirmee >= 0", name="ck_ananas_sup_confirm_positive"),
+        Index("ix_ananas_numero", "numero"),
+    )
+
+
+class SavedAnanasAuditSuggestion(Base):
+    """Instantané immuable d'une suggestion d'échantillonnage Ananas."""
+
+    __tablename__ = "saved_ananas_audit_suggestions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(200), nullable=False)
+    created_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    snapshot = Column(JSON().with_variant(JSONB, "postgresql"), nullable=False)
+    nb_fiches_echantillon = Column(Integer, nullable=False, default=0)
+    superficie_echantillon = Column(Numeric(12, 3), nullable=True)
+    pourcentage_couverture = Column(Numeric(6, 2), nullable=True)
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
+
+    created_by = relationship("User", foreign_keys=[created_by_id])
+    __table_args__ = (Index("ix_saved_ananas_audit_created_at", "created_at"),)

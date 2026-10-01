@@ -144,7 +144,7 @@ export default function BrigadesPage() {
         <main className="min-w-0 flex-1 space-y-6">
 
           {/* Breadcrumb */}
-          <button onClick={() => navigate("/")} className="btn-secondary">
+          <button onClick={() => navigate("/anacardier")} className="btn-secondary">
             <ArrowLeft size={16} /> Retour aux fiches
           </button>
 
@@ -339,7 +339,7 @@ export default function BrigadesPage() {
                           {/* Action */}
                           <td className="px-4 py-3 text-right">
                             <button
-                              onClick={() => navigate(`/?brigade=${encodeURIComponent(b.brigade_name)}`)}
+                              onClick={() => navigate(`/anacardier?brigade=${encodeURIComponent(b.brigade_name)}`)}
                               className="text-xs text-forest-600 hover:underline whitespace-nowrap"
                               title="Voir les fiches de cette brigade"
                             >

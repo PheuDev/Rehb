@@ -28,10 +28,14 @@ const PAGE_TITLES = {
   "/mes-brigades": "Mes brigades",
   "/mon-equipe": "Mon équipe",
   "/admin": "Administration",
+  "/ananas": "Plantations Ananas",
+  "/ananas/echantillonnage": "Échantillonnage Ananas",
+  "/ananas/suggestions": "Suggestions Ananas",
 };
 
 export function pageTitleFor(pathname) {
   if (PAGE_TITLES[pathname]) return PAGE_TITLES[pathname];
+  if (pathname.startsWith("/ananas/")) return "Système Ananas";
   const match = Object.keys(PAGE_TITLES).find(
     (path) => path !== "/" && pathname.startsWith(`${path}/`)
   );
@@ -44,11 +48,15 @@ export default function AppHeader({ sidebarOpen, onToggleSidebar, onNewFiche }) 
   const isFieldUser = user?.role !== "admin";
   const { pathname } = useLocation();
   const pageTitle = pageTitleFor(pathname);
+  const appName = pathname.startsWith("/ananas") ? "Système Ananas" : APP_NAME;
+  const subtitle = pathname.startsWith("/ananas")
+    ? "Suivi des plantations d’ananas"
+    : isFieldUser ? "Suivi terrain" : APP_NAME;
 
   // Titre d'onglet synchronisé avec la page courante (navigation multi-onglets).
   useEffect(() => {
-    document.title = `${pageTitle} · ${APP_NAME}`;
-  }, [pageTitle]);
+    document.title = `${pageTitle} · ${appName}`;
+  }, [pageTitle, appName]);
 
   return (
     <>
@@ -75,7 +83,7 @@ export default function AppHeader({ sidebarOpen, onToggleSidebar, onNewFiche }) 
                 {pageTitle}
               </h1>
               <p className="hidden truncate text-sm text-gray-500 sm:block">
-                {isFieldUser ? "Suivi terrain" : APP_NAME}
+                {subtitle}
               </p>
             </div>
           </div>
