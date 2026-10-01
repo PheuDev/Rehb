@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -586,3 +586,19 @@ def export_saved_audit_suggestion(
     snapshot = item.snapshot or {}
     filename = f"suggestion_ananas_{item.id}.xlsx"
     return _workbook_response(ananas_excel.build_suggestion_workbook(snapshot), filename)
+
+
+@router.delete("/audit-suggestions/{suggestion_id}", status_code=204)
+def delete_audit_suggestion(
+    suggestion_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    item = db.query(SavedAnanasAuditSuggestion).filter(
+        SavedAnanasAuditSuggestion.id == suggestion_id
+    ).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Suggestion Ananas introuvable.")
+    db.delete(item)
+    db.commit()
+    return Response(status_code=204)

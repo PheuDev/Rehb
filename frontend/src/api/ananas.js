@@ -88,3 +88,7 @@ export async function exportSavedAnanasAuditSuggestion(id) {
   const { data } = await client.get(`/ananas/audit-suggestions/${id}/export-excel`, { responseType: "blob" });
   downloadBlob(data, `suggestion_ananas_${id}.xlsx`);
 }
+
+export async function deleteAnanasAuditSuggestion(id) {
+  await client.delete(`/ananas/audit-suggestions/${id}`);
+}
