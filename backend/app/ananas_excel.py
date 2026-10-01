@@ -316,3 +316,106 @@ def build_data_workbook(sheets: list[tuple[str, list[dict]]]) -> Workbook:
             ws.append(_row_from_item(item))
         ws.freeze_panes = "A3"
     return workbook
+
+
+def build_suggestion_workbook(snapshot: dict[str, Any]) -> Workbook:
+    """Builds the complete suggestion export, including its summary sheet."""
+    sheets = [
+        ("Échantillon", snapshot.get("fiches", [])),
+        ("Hors échantillon", snapshot.get("fiches_hors_echantillon", [])),
+    ]
+    if snapshot.get("fiches_sans_superficie_confirmee"):
+        sheets.append(("À compléter", snapshot["fiches_sans_superficie_confirmee"]))
+    if snapshot.get("fiches_sans_arrondissement"):
+        sheets.append(("Sans arrondissement", snapshot["fiches_sans_arrondissement"]))
+
+    workbook = build_data_workbook(sheets)
+    ws = workbook.create_sheet("Synthèse", 0)
+    ws.merge_cells("A1:E1")
+    title = ws["A1"]
+    title.value = "SYNTHÈSE DE LA SUGGESTION ANANAS"
+    title.font = Font(bold=True, color="FFFFFF", size=14)
+    title.fill = PatternFill(start_color="38761D", end_color="38761D", fill_type="solid")
+    title.alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[1].height = 28
+
+    header_fill = PatternFill(start_color="C6E0B4", end_color="C6E0B4", fill_type="solid")
+    section_fill = PatternFill(start_color="E2F0D9", end_color="E2F0D9", fill_type="solid")
+
+    def section(row: int, label: str, headers: list[str]) -> int:
+        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=len(headers))
+        cell = ws.cell(row, 1, label)
+        cell.font = Font(bold=True, color="274E13")
+        cell.fill = section_fill
+        for column, header in enumerate(headers, start=1):
+            heading = ws.cell(row + 1, column, header)
+            heading.font = Font(bold=True)
+            heading.fill = header_fill
+            heading.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        return row + 2
+
+    row = section(3, "Indicateurs généraux", ["Indicateur", "Valeur", "Unité"])
+    metrics = [
+        ("Plantations dans la base", snapshot.get("total_fiches", 0), "fiches"),
+        ("Plantations éligibles", snapshot.get("total_fiches_eligibles", 0), "fiches"),
+        ("Plantations retenues", len(snapshot.get("fiches", [])), "fiches"),
+        ("Plantations hors échantillon", len(snapshot.get("fiches_hors_echantillon", [])), "fiches"),
+        ("Superficie totale", snapshot.get("superficie_totale", 0), "ha"),
+        ("Superficie échantillonnée", snapshot.get("superficie_echantillon", 0), "ha"),
+        ("Couverture obtenue", snapshot.get("pourcentage_couverture", 0), "%"),
+        ("Cible de superficie", snapshot.get("pourcentage_cible", 40), "%"),
+        ("Base de calcul", snapshot.get("base_superficie", "Superficie attribuée / confirmée (ha)"), ""),
+    ]
+    for metric in metrics:
+        for column, value in enumerate(metric, start=1):
+            ws.cell(row, column, value)
+        row += 1
+
+    row += 1
+    row = section(row, "Quota par classe de superficie", [
+        "Classe", "Fiches disponibles", "Minimum requis", "Fiches sélectionnées", "Superficie échantillonnée (ha)",
+    ])
+    for item in snapshot.get("par_classe", []):
+        values = [
+            item.get("classe"), item.get("plantations_total", 0), item.get("minimum_requis", 0),
+            item.get("plantations_echantillon", 0), item.get("superficie_echantillon", 0),
+        ]
+        for column, value in enumerate(values, start=1):
+            ws.cell(row, column, value)
+        row += 1
+
+    row += 1
+    row = section(row, "Quota par type de friche", [
+        "Type de friche", "Fiches disponibles", "Minimum requis", "Fiches sélectionnées", "Cible (%)",
+    ])
+    for item in snapshot.get("par_type_friche", []):
+        values = [
+            item.get("type_friche"), item.get("plantations_total", 0), item.get("minimum_requis", 0),
+            item.get("plantations_echantillon", 0), item.get("pourcentage_cible", 30),
+        ]
+        for column, value in enumerate(values, start=1):
+            ws.cell(row, column, value)
+        row += 1
+
+    row += 1
+    row = section(row, "Couverture par arrondissement et classe", [
+        "Arrondissement", "Classe", "Fiches disponibles", "Fiches sélectionnées",
+    ])
+    for item in snapshot.get("par_arrondissement_et_classe", []):
+        values = [
+            item.get("arrondissement"), item.get("classe"), item.get("plantations_total", 0),
+            item.get("plantations_echantillon", 0),
+        ]
+        for column, value in enumerate(values, start=1):
+            ws.cell(row, column, value)
+        row += 1
+
+    for column, width in enumerate((42, 32, 24, 25, 30), start=1):
+        ws.column_dimensions[get_column_letter(column)].width = width
+    ws.freeze_panes = "A5"
+    ws.auto_filter.ref = f"A4:C{4 + len(metrics)}"
+    for cells in ws.iter_rows(min_row=1, max_row=ws.max_row, max_col=5):
+        for cell in cells:
+            if cell.value is not None:
+                cell.alignment = Alignment(vertical="top", wrap_text=True)
+    return workbook

@@ -507,15 +507,7 @@ def export_audit_sample(
     current_user: User = Depends(require_active),
 ):
     result = _generate_sample(db)
-    sheets = [
-        ("Échantillon", result["fiches"]),
-        ("Hors échantillon", result["fiches_hors_echantillon"]),
-    ]
-    if result["fiches_sans_superficie_confirmee"]:
-        sheets.append(("À compléter", result["fiches_sans_superficie_confirmee"]))
-    if result["fiches_sans_arrondissement"]:
-        sheets.append(("Sans arrondissement", result["fiches_sans_arrondissement"]))
-    return _workbook_response(ananas_excel.build_data_workbook(sheets), "echantillon_ananas.xlsx")
+    return _workbook_response(ananas_excel.build_suggestion_workbook(result), "echantillon_ananas.xlsx")
 
 
 @router.post("/audit-sample/export-excel")
@@ -527,12 +519,7 @@ def export_current_audit_sample(
     snapshot = payload.snapshot
     if not isinstance(snapshot.get("fiches"), list):
         raise HTTPException(status_code=400, detail="La suggestion ne contient pas de liste d'échantillon valide.")
-    sheets = [("Échantillon", snapshot.get("fiches", [])), ("Hors échantillon", snapshot.get("fiches_hors_echantillon", []))]
-    if snapshot.get("fiches_sans_superficie_confirmee"):
-        sheets.append(("À compléter", snapshot["fiches_sans_superficie_confirmee"]))
-    if snapshot.get("fiches_sans_arrondissement"):
-        sheets.append(("Sans arrondissement", snapshot["fiches_sans_arrondissement"]))
-    return _workbook_response(ananas_excel.build_data_workbook(sheets), "echantillon_ananas.xlsx")
+    return _workbook_response(ananas_excel.build_suggestion_workbook(snapshot), "echantillon_ananas.xlsx")
 
 
 @router.post("/audit-suggestions", status_code=201)
@@ -597,10 +584,5 @@ def export_saved_audit_suggestion(
     if not item:
         raise HTTPException(status_code=404, detail="Suggestion Ananas introuvable.")
     snapshot = item.snapshot or {}
-    sheets = [("Échantillon", snapshot.get("fiches", [])), ("Hors échantillon", snapshot.get("fiches_hors_echantillon", []))]
-    if snapshot.get("fiches_sans_superficie_confirmee"):
-        sheets.append(("À compléter", snapshot["fiches_sans_superficie_confirmee"]))
-    if snapshot.get("fiches_sans_arrondissement"):
-        sheets.append(("Sans arrondissement", snapshot["fiches_sans_arrondissement"]))
     filename = f"suggestion_ananas_{item.id}.xlsx"
-    return _workbook_response(ananas_excel.build_data_workbook(sheets), filename)
+    return _workbook_response(ananas_excel.build_suggestion_workbook(snapshot), filename)
