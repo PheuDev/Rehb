@@ -5,6 +5,7 @@ import AnanasLayout from "../components/AnanasLayout.jsx";
 import { AlertCircle, Download, FileSpreadsheet, Pencil, Search, Trash2, UploadCloud, X } from "lucide-react";
 import {
   deleteAnanasPlantation,
+  clearAnanasDatabase,
   downloadAnanasTemplate,
   exportAnanasPlantations,
   getAnanasFilters,
@@ -101,6 +102,8 @@ export default function AnanasPlantationsPage() {
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState("");
   const [showImport, setShowImport] = useState(false);
+  const [showClearDatabase, setShowClearDatabase] = useState(false);
+  const [clearConfirmation, setClearConfirmation] = useState("");
   const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
   const [actionBusy, setActionBusy] = useState(false);
@@ -134,10 +137,26 @@ export default function AnanasPlantationsPage() {
     finally { setActionBusy(false); }
   }
 
+  async function confirmClearDatabase() {
+    if (clearConfirmation.trim() !== "VIDER ANANAS") return;
+    setActionBusy(true); setError("");
+    try {
+      const result = await clearAnanasDatabase();
+      setShowClearDatabase(false); setClearConfirmation("");
+      setFilters(emptyFilters); setPage(1);
+      setNotice(`${result.plantations_supprimees} plantation(s) et ${result.suggestions_supprimees} suggestion(s) Ananas supprimée(s).`);
+      await reload();
+    } catch (err) {
+      setError(err?.response?.data?.detail || "Impossible de vider les données Ananas.");
+    } finally { setActionBusy(false); }
+  }
+
   return (
     <AnanasLayout>
       <main className="space-y-5">
-        <section className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end"><div><p className="text-sm font-semibold text-amber-700">Système Ananas</p><h2 className="mt-1 text-2xl font-bold text-gray-900">Plantations</h2><p className="mt-1 text-sm text-gray-600">Fiches séparées du système Anacardier, importées selon le modèle Ananas.</p></div><div className="flex flex-wrap gap-2">{isAdmin && <button onClick={() => setShowImport(true)} className="btn-primary bg-amber-600 hover:bg-amber-700"><UploadCloud size={16} /> Importer Excel</button>}<button onClick={exportCurrent} className="btn-secondary"><Download size={16} /> Exporter</button></div></section>
+        <section className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end"><div><p className="text-sm font-semibold text-amber-700">Système Ananas</p><h2 className="mt-1 text-2xl font-bold text-gray-900">Plantations</h2><p className="mt-1 text-sm text-gray-600">Fiches séparées du système Anacardier, importées selon le modèle Ananas.</p></div><div className="flex flex-wrap gap-2">{isAdmin && <><button onClick={() => setShowImport(true)} className="btn-primary bg-amber-600 hover:bg-amber-700"><UploadCloud size={16} /> Importer Excel</button><button onClick={() => { setClearConfirmation(""); setShowClearDatabase(true); }} className="btn-secondary border-red-300 text-red-700 hover:bg-red-50"><Trash2 size={16} /> Vider BD Ananas</button></>}<button onClick={exportCurrent} className="btn-secondary"><Download size={16} /> Exporter</button></div></section>
+        {notice && <p role="status" className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">{notice}</p>}
+        {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5"><Stat label="Plantations" value={stats?.total_plantations ?? "—"} /><Stat label="Superficie confirmée" value={stats ? `${number(stats.superficie_confirmee_totale)} ha` : "—"} detail="Base retenue pour l’échantillonnage" /><Stat label="Classe 1" value={stats?.par_classe?.[1] ?? "—"} detail="0 à 4,9 ha" /><Stat label="Classe 2" value={stats?.par_classe?.[2] ?? "—"} detail="5 à 9,9 ha" /><Stat label="Classe 3" value={stats?.par_classe?.[3] ?? "—"} detail="10 ha et plus" /></section>
         {stats?.sans_superficie_confirmee > 0 && <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{stats.sans_superficie_confirmee} fiche(s) n’ont pas de superficie attribuée / confirmée et ne pourront pas être échantillonnées.</p>}
         <section className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4"><div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-[minmax(240px,1fr)_repeat(3,minmax(150px,220px))]">
@@ -154,6 +173,7 @@ export default function AnanasPlantationsPage() {
         </div><footer className="flex items-center justify-between border-t border-gray-200 px-4 py-3 text-sm text-gray-600"><span>Page {pagination?.page ?? page} sur {Math.max(1, pagination?.pages ?? 1)}</span><div className="flex gap-2"><button disabled={page <= 1 || busy} onClick={() => setPage((old) => old - 1)} className="btn-secondary px-3">Précédent</button><button disabled={!pagination || page >= pagination.pages || busy} onClick={() => setPage((old) => old + 1)} className="btn-secondary px-3">Suivant</button></div></footer></section>
       </main>
       {showImport && <ImportDialog onClose={() => setShowImport(false)} onImported={reload} />}
+      {showClearDatabase && <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/50 p-3"><section role="alertdialog" aria-modal="true" aria-labelledby="clear-ananas-title" className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl sm:p-6"><h2 id="clear-ananas-title" className="text-lg font-semibold text-gray-900">Vider la base Ananas ?</h2><p className="mt-2 text-sm text-gray-600">Cette action supprimera définitivement toutes les plantations et suggestions enregistrées dans l’espace Ananas. Les données du système Anacardier ne seront pas touchées.</p><label className="mt-4 block text-sm font-medium text-gray-700">Tapez <span className="font-bold">VIDER ANANAS</span> pour confirmer<input autoComplete="off" value={clearConfirmation} onChange={(event) => setClearConfirmation(event.target.value)} className="input mt-1" /></label><div className="mt-5 flex justify-end gap-2"><button onClick={() => setShowClearDatabase(false)} disabled={actionBusy} className="btn-secondary">Annuler</button><button onClick={confirmClearDatabase} disabled={actionBusy || clearConfirmation.trim() !== "VIDER ANANAS"} className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"><Trash2 size={15} />{actionBusy ? "Suppression…" : "Vider la base Ananas"}</button></div></section></div>}
       {editing && <EditDialog item={editing} onClose={() => setEditing(null)} onSaved={reload} />}
       {deleting && <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/40 p-3"><section role="alertdialog" aria-modal="true" className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl"><h2 className="font-semibold text-gray-900">Supprimer cette fiche ?</h2><p className="mt-2 text-sm text-gray-600">La plantation N° {deleting.numero} — {deleting.nom_prenoms || "sans nom"} sera supprimée du système Ananas.</p><div className="mt-5 flex justify-end gap-2"><button onClick={() => setDeleting(null)} disabled={actionBusy} className="btn-secondary">Annuler</button><button onClick={confirmDelete} disabled={actionBusy} className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">{actionBusy ? "Suppression…" : <><Trash2 size={15} /> Supprimer</>}</button></div></section></div>}
     </AnanasLayout>

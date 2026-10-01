@@ -1,6 +1,7 @@
 """API dédiée au système Ananas : import strict, fiches et échantillonnage."""
 
 import io
+import math
 import random
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -20,7 +21,9 @@ from app.models import AnanasPlantation, SavedAnanasAuditSuggestion, User
 router = APIRouter(prefix="/api/ananas", tags=["Système Ananas"])
 XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 SAMPLE_AREA_FIELD = "superficie_confirmee"
-SAMPLE_TARGET_PERCENT = 30.0
+CLASS_SAMPLE_PERCENT = 30.0
+FRICHE_SAMPLE_PERCENT = 30.0
+SAMPLE_TARGET_PERCENT = 40.0
 SORTABLE_FIELDS = {
     "numero": AnanasPlantation.numero,
     "nom_prenoms": AnanasPlantation.nom_prenoms,
@@ -164,10 +167,17 @@ def _generate_sample(db: Session) -> dict[str, Any]:
     randomizer = random.SystemRandom()
     strata: dict[tuple[str, str], list[AnanasPlantation]] = {}
     classes: dict[str, list[AnanasPlantation]] = {}
-    for row in known_area:
+    friches: dict[str, list[AnanasPlantation]] = {}
+    friche_labels: dict[str, str] = {}
+    for row in eligible:
         cls = _class_for_area(row.superficie_confirmee)
         if cls:
             classes.setdefault(cls, []).append(row)
+        if row.type_friche and row.type_friche.strip():
+            friche_label = row.type_friche.strip()
+            friche_key = friche_label.casefold()
+            friches.setdefault(friche_key, []).append(row)
+            friche_labels.setdefault(friche_key, friche_label)
     for row in eligible:
         cls = _class_for_area(row.superficie_confirmee)
         if not cls:
@@ -180,10 +190,53 @@ def _generate_sample(db: Session) -> dict[str, Any]:
         chosen = randomizer.choice(candidates)
         selected[chosen.id] = chosen
 
+    # Garantit les quotas de fiches de chaque classe et de chaque type de friche.
+    class_targets = {
+        cls: math.ceil(len(population) * CLASS_SAMPLE_PERCENT / 100)
+        for cls, population in classes.items()
+    }
+    friche_targets = {
+        key: math.ceil(len(population) * FRICHE_SAMPLE_PERCENT / 100)
+        for key, population in friches.items()
+    }
+    selected_by_class = {
+        cls: sum(1 for row in selected.values() if _class_for_area(row.superficie_confirmee) == cls)
+        for cls in classes
+    }
+    selected_by_friche = {
+        key: sum(1 for row in selected.values() if row.type_friche and row.type_friche.strip().casefold() == key)
+        for key in friches
+    }
+    quota_candidates = [row for row in eligible if row.id not in selected]
+    while True:
+        best: list[AnanasPlantation] = []
+        best_score = 0
+        for row in quota_candidates:
+            cls = _class_for_area(row.superficie_confirmee)
+            friche_key = row.type_friche.strip().casefold() if row.type_friche and row.type_friche.strip() else None
+            score = int(cls in class_targets and selected_by_class[cls] < class_targets[cls])
+            score += int(friche_key in friche_targets and selected_by_friche[friche_key] < friche_targets[friche_key])
+            if score > best_score:
+                best = [row]
+                best_score = score
+            elif score and score == best_score:
+                best.append(row)
+        if not best_score:
+            break
+        chosen = randomizer.choice(best)
+        selected[chosen.id] = chosen
+        quota_candidates.remove(chosen)
+        cls = _class_for_area(chosen.superficie_confirmee)
+        if cls in selected_by_class:
+            selected_by_class[cls] += 1
+        friche_key = chosen.type_friche.strip().casefold() if chosen.type_friche and chosen.type_friche.strip() else None
+        if friche_key in selected_by_friche:
+            selected_by_friche[friche_key] += 1
+
     total_area = sum((row.superficie_confirmee or Decimal("0") for row in known_area), Decimal("0"))
     selected_area = sum((row.superficie_confirmee or Decimal("0") for row in selected.values()), Decimal("0"))
     target_area = total_area * Decimal(str(SAMPLE_TARGET_PERCENT / 100))
-    remaining = [row for row in eligible if row.id not in selected]
+    remaining = [row for row in quota_candidates if row.id not in selected]
     randomizer.shuffle(remaining)
     for row in remaining:
         if selected_area >= target_area:
@@ -195,7 +248,7 @@ def _generate_sample(db: Session) -> dict[str, Any]:
         raise HTTPException(
             status_code=409,
             detail=(
-                "La cible de 30 % ne peut pas être atteinte tant que des plantations "
+                f"La cible de superficie de {SAMPLE_TARGET_PERCENT:g} % ne peut pas être atteinte tant que des plantations "
                 "avec superficie confirmée n'ont pas d'arrondissement renseigné. "
                 f"{len(no_arrondissement)} fiche(s) à compléter."
             ),
@@ -216,8 +269,21 @@ def _generate_sample(db: Session) -> dict[str, Any]:
             "classe": cls,
             "plantations_total": len(population),
             "plantations_echantillon": len(sampled),
+            "minimum_requis": class_targets.get(cls, 0),
+            "pourcentage_cible": CLASS_SAMPLE_PERCENT,
             "superficie_totale": float(sum((item.superficie_confirmee or Decimal("0") for item in population), Decimal("0"))),
             "superficie_echantillon": float(sum((item.superficie_confirmee or Decimal("0") for item in sampled), Decimal("0"))),
+        })
+
+    friche_summary = []
+    for key, population in sorted(friches.items(), key=lambda item: friche_labels[item[0]].casefold()):
+        sampled_count = sum(1 for item in population if item.id in selected)
+        friche_summary.append({
+            "type_friche": friche_labels[key],
+            "plantations_total": len(population),
+            "plantations_echantillon": sampled_count,
+            "minimum_requis": friche_targets[key],
+            "pourcentage_cible": FRICHE_SAMPLE_PERCENT,
         })
 
     strata_summary = []
@@ -242,8 +308,11 @@ def _generate_sample(db: Session) -> dict[str, Any]:
         "superficie_echantillon": float(selected_area),
         "pourcentage_couverture": round(coverage, 2),
         "pourcentage_cible": SAMPLE_TARGET_PERCENT,
+        "pourcentage_cible_par_classe": CLASS_SAMPLE_PERCENT,
+        "pourcentage_cible_par_type_friche": FRICHE_SAMPLE_PERCENT,
         "base_superficie": "Superficie attribuée / confirmée (ha)",
         "par_classe": class_summary,
+        "par_type_friche": friche_summary,
         "par_arrondissement_et_classe": strata_summary,
     }
 
@@ -335,6 +404,25 @@ async def import_excel(
         "total": len(rows) + len(errors),
         "importees": len(rows),
         "erreurs": errors,
+    }
+
+
+@router.delete("/database")
+def clear_ananas_database(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """Supprime uniquement les fiches et suggestions propres au système Ananas."""
+    try:
+        suggestions_deleted = db.query(SavedAnanasAuditSuggestion).delete(synchronize_session=False)
+        plantations_deleted = db.query(AnanasPlantation).delete(synchronize_session=False)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Impossible de vider les données Ananas.") from exc
+    return {
+        "plantations_supprimees": plantations_deleted,
+        "suggestions_supprimees": suggestions_deleted,
     }
 
 

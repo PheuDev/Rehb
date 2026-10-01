@@ -54,6 +54,11 @@ export async function deleteAnanasPlantation(id) {
   await client.delete(`/ananas/plantations/${id}`);
 }
 
+export async function clearAnanasDatabase() {
+  const { data } = await client.delete("/ananas/database");
+  return data;
+}
+
 export async function getAnanasAuditSample() {
   const { data } = await client.get("/ananas/audit-sample");
   return data;
