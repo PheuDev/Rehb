@@ -83,25 +83,52 @@ def _text_value(value: Any, header: str) -> str | None:
     return cleaned or None
 
 
-def _validate_headers(ws) -> None:
-    actual = [ws.cell(1, column).value for column in range(1, len(HEADERS) + 1)]
-    normalized = [value.strip() if isinstance(value, str) else value for value in actual]
-    if normalized != HEADERS:
-        raise ValueError(
-            "Les en-têtes de la première ligne ne correspondent pas au modèle Ananas. "
-            "La cellule G1 doit contenir « Coordonnées Géographiques » et être fusionnée avec H1."
-        )
-    if any(ws.cell(1, column).value not in (None, "") for column in range(len(HEADERS) + 1, ws.max_column + 1)):
-        raise ValueError("Le classeur contient des colonnes supplémentaires après « Sup attribuée / confirmée (ha) ».")
-    if "G1:H1" not in {str(rng) for rng in ws.merged_cells.ranges}:
-        raise ValueError("L'en-tête « Coordonnées Géographiques » doit couvrir les colonnes X et Y (G1:H1).")
-    subheaders = (ws.cell(2, 7).value, ws.cell(2, 8).value)
-    if subheaders != ("X", "Y"):
-        raise ValueError("La deuxième ligne doit contenir « X » en G et « Y » en H sous l'en-tête fusionné.")
-    if any(ws.cell(2, column).value not in (None, "") for column in (*range(1, 7), *range(9, len(HEADERS) + 1))):
-        raise ValueError("La deuxième ligne du modèle doit contenir uniquement les coordonnées X et Y.")
-    if any(ws.cell(2, column).value not in (None, "") for column in range(len(HEADERS) + 1, ws.max_column + 1)):
-        raise ValueError("Le classeur contient des en-têtes supplémentaires sur la deuxième ligne.")
+def _header_text(value: Any) -> Any:
+    return " ".join(value.split()) if isinstance(value, str) else value
+
+
+def _header_errors(ws, header_row: int) -> list[str]:
+    actual = [ws.cell(header_row, column).value for column in range(1, len(HEADERS) + 1)]
+    normalized = [_header_text(value) for value in actual]
+    errors = []
+    for index, (expected, found) in enumerate(zip(HEADERS, normalized), start=1):
+        if expected != found:
+            letter = get_column_letter(index)
+            errors.append(f"{letter}{header_row} : attendu {expected!r}, trouvé {found!r}")
+
+    if "G{}:H{}".format(header_row, header_row) not in {str(rng) for rng in ws.merged_cells.ranges}:
+        errors.append(f"G{header_row}:H{header_row} doit être fusionné pour « Coordonnées Géographiques »")
+    if (_header_text(ws.cell(header_row + 1, 7).value), _header_text(ws.cell(header_row + 1, 8).value)) != ("X", "Y"):
+        errors.append(f"G{header_row + 1} doit contenir « X » et H{header_row + 1} « Y »")
+    for column in (*range(1, 7), *range(9, len(HEADERS) + 1)):
+        if ws.cell(header_row + 1, column).value not in (None, ""):
+            errors.append(f"{get_column_letter(column)}{header_row + 1} doit rester vide")
+    if any(ws.cell(header_row, column).value not in (None, "") for column in range(len(HEADERS) + 1, ws.max_column + 1)):
+        errors.append("des en-têtes supplémentaires apparaissent après la colonne Q")
+    if any(ws.cell(header_row + 1, column).value not in (None, "") for column in range(len(HEADERS) + 1, ws.max_column + 1)):
+        errors.append("des en-têtes supplémentaires apparaissent après la colonne Q sur la ligne X/Y")
+    return errors
+
+
+def _find_header_location(workbook):
+    candidates = []
+    for ws in workbook.worksheets:
+        for row in range(1, min(ws.max_row, 15) + 1):
+            if _header_text(ws.cell(row, 1).value) == "N":
+                candidates.append((ws, row))
+                errors = _header_errors(ws, row)
+                if not errors:
+                    return ws, row
+
+    if candidates:
+        ws, row = candidates[0]
+        errors = _header_errors(ws, row)
+        detail = "; ".join(errors[:5])
+        raise ValueError(f"Les en-têtes ne correspondent pas au modèle Ananas (feuille « {ws.title} », ligne {row}) : {detail}.")
+
+    ws = workbook.active
+    sample_row = next((r for r in range(1, min(ws.max_row, 15) + 1) if any(ws.cell(r, c).value is not None for c in range(1, min(ws.max_column, 17) + 1))), 1)
+    raise ValueError(f"Aucune ligne d'en-tête Ananas trouvée dans les 15 premières lignes de la feuille « {ws.title} » (ligne vérifiée : {sample_row}).")
 
 
 def parse_import_workbook(content: bytes) -> tuple[list[dict], list[dict]]:
@@ -110,14 +137,14 @@ def parse_import_workbook(content: bytes) -> tuple[list[dict], list[dict]]:
     except Exception as exc:
         raise ValueError("Le fichier Excel est illisible ou endommagé.") from exc
 
-    ws = workbook.active
-    if ws.max_row < 1:
-        raise ValueError("Le classeur ne contient aucune ligne d'en-tête.")
-    _validate_headers(ws)
+    if not workbook.worksheets:
+        raise ValueError("Le classeur ne contient aucune feuille.")
+    ws, header_row = _find_header_location(workbook)
 
     valid_rows: list[dict] = []
     row_errors: list[dict] = []
-    for row_number in range(3, ws.max_row + 1):
+    first_data_row = header_row + 2
+    for row_number in range(first_data_row, ws.max_row + 1):
         values = [ws.cell(row_number, column).value for column in range(1, len(HEADERS) + 1)]
         if all(value is None or (isinstance(value, str) and not value.strip()) for value in values):
             continue
