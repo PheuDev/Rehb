@@ -22,7 +22,7 @@ const NAV_SECTIONS = [
   {
     label: null,
     items: [
-      { path: "/",          icon: Home,      label: "Accueil",   accent: "bg-forest-100 text-forest-700", roles: ["admin"] },
+      { path: "/anacardier", icon: Home,      label: "Accueil",   accent: "bg-forest-100 text-forest-700", roles: ["admin"] },
       { path: "/dashboard", icon: BarChart3, label: "Dashboard", accent: "bg-sky-100 text-sky-700", roles: ["admin"] },
     ],
   },

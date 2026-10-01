@@ -20,6 +20,8 @@ const MesFichesPage = lazy(() => import("./pages/MesFichesPage.jsx"));
 const PlantationsHorsEchantillonPage = lazy(() => import("./pages/PlantationsHorsEchantillonPage.jsx"));
 const MesBrigadesPage = lazy(() => import("./pages/MesBrigadesPage.jsx"));
 const MonEquipePage = lazy(() => import("./pages/MonEquipePage.jsx"));
+const SystemSelectorPage = lazy(() => import("./pages/SystemSelectorPage.jsx"));
+const AnanasDevelopmentPage = lazy(() => import("./pages/AnanasDevelopmentPage.jsx"));
 
 /** Écran d'attente pendant le téléchargement d'un chunk de page. */
 function PageFallback() {
@@ -45,7 +47,9 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
 
           {/* ── Routes protégées (tout utilisateur authentifié actif) ── */}
-          <Route path="/" element={<PrivateRoute><RehabilitationsPage /></PrivateRoute>} />
+          <Route path="/" element={<PrivateRoute><SystemSelectorPage /></PrivateRoute>} />
+          <Route path="/anacardier" element={<PrivateRoute><RehabilitationsPage /></PrivateRoute>} />
+          <Route path="/ananas" element={<PrivateRoute><AnanasDevelopmentPage /></PrivateRoute>} />
           <Route path="/brigades" element={<PrivateRoute><BrigadesPage /></PrivateRoute>} />
           <Route path="/dashboard" element={<PrivateRoute><DashboardPage /></PrivateRoute>} />
           <Route path="/producteurs" element={<PrivateRoute><ProducersPage /></PrivateRoute>} />
