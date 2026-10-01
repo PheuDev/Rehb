@@ -315,8 +315,8 @@ BASE_DDL = [
         commune                     VARCHAR(180),
         arrondissement              VARCHAR(180),
         village_hameau               VARCHAR(180),
-        coord_x                     NUMERIC(14,6) CHECK (coord_x IS NULL OR coord_x >= 0),
-        coord_y                     NUMERIC(14,6) CHECK (coord_y IS NULL OR coord_y >= 0),
+        coord_x                     NUMERIC(16,6) CHECK (coord_x IS NULL OR coord_x >= 0),
+        coord_y                     NUMERIC(16,6) CHECK (coord_y IS NULL OR coord_y >= 0),
         superficie_declaree         NUMERIC(12,3) CHECK (superficie_declaree IS NULL OR superficie_declaree >= 0),
         superficie_trackee          NUMERIC(12,3) CHECK (superficie_trackee IS NULL OR superficie_trackee >= 0),
         type_friche                 VARCHAR(180),
@@ -486,8 +486,8 @@ def migrate_ananas_coordinate_precision() -> None:
     with engine.begin() as conn:
         conn.exec_driver_sql(
             "ALTER TABLE ananas_plantations "
-            "ALTER COLUMN coord_x TYPE NUMERIC(14,6) USING coord_x::NUMERIC(14,6), "
-            "ALTER COLUMN coord_y TYPE NUMERIC(14,6) USING coord_y::NUMERIC(14,6)"
+            "ALTER COLUMN coord_x TYPE NUMERIC(16,6) USING coord_x::NUMERIC(16,6), "
+            "ALTER COLUMN coord_y TYPE NUMERIC(16,6) USING coord_y::NUMERIC(16,6)"
         )
 
 
