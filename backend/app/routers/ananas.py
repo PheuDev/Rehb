@@ -318,8 +318,8 @@ async def import_excel(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
-    if not file.filename or not file.filename.lower().endswith((".xlsx", ".xlsm")):
-        raise HTTPException(status_code=400, detail="Le fichier doit être au format Excel (.xlsx).")
+    if not file.filename or not file.filename.lower().endswith((".xls", ".xlsx", ".xlsm")):
+        raise HTTPException(status_code=400, detail="Le fichier doit être au format Excel (.xls, .xlsx ou .xlsm).")
     try:
         rows, errors = ananas_excel.parse_import_workbook(await file.read())
     except ValueError as exc:
